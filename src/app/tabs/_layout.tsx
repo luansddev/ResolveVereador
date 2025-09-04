@@ -1,9 +1,8 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Pressable } from 'react-native';
 import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import Entypo from '@expo/vector-icons/Entypo';
-import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
+import { Entypo } from '@expo/vector-icons';
+import { FontAwesome6 } from '@expo/vector-icons';
 
 // Componente para o botão do meio, que será flutuante
 const CustomAddButton = ({ children, onPress }) => (
@@ -32,7 +31,6 @@ const NoHighlightButton = ({ children, style, ...props }) => (
 
 export default function TabsLayout() {
   return (
-    
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -47,7 +45,6 @@ export default function TabsLayout() {
         name="home"
         options={{
           title: 'Início',
-          // Usa o novo componente para o botão
           tabBarButton: (props) => <NoHighlightButton {...props} />,
           tabBarIcon: ({ color }) => (
             <View style={styles.iconWrapper}>
@@ -66,7 +63,6 @@ export default function TabsLayout() {
           tabBarIcon: () => (
             <Entypo name="megaphone" size={30} color="white" />
           ),
-          // OCULTA A TAB BAR APENAS PARA ESTA TELA
           tabBarStyle: { display: 'none' }, 
         }}
       />
@@ -76,13 +72,36 @@ export default function TabsLayout() {
         name="conta"
         options={{
           title: 'Conta',
-          // Usa o novo componente para o botão
           tabBarButton: (props) => <NoHighlightButton {...props} />,
           tabBarIcon: ({ color }) => (
             <View style={styles.iconWrapper}>
               <FontAwesome6 name="user-large" size={30} color={color} />
             </View>
           ),
+        }}
+      />
+
+      {/* --- TELAS OCULTAS NO MENU --- */}
+      <Tabs.Screen
+        name="actions/editarPerfil"
+        options={{
+          href: null,
+          tabBarStyle: { display: 'none' },
+        }}
+      />
+
+      <Tabs.Screen
+        name="actions/detalhesOcorrencia"
+        options={{
+          href: null
+        }}
+      />
+      
+      <Tabs.Screen
+        name="actions/ocorrenciasUser"
+        options={{
+          href: null, // Esta linha oculta a aba do menu inferior
+          tabBarStyle: { display: 'none' }, // E esta linha oculta a barra de navegação nesta tela
         }}
       />
     </Tabs>
@@ -123,6 +142,7 @@ const styles = StyleSheet.create({
   iconWrapper: {
     position: 'absolute',
     top: '50%',
-    transform: [{ translateY: -5 }], // Ajusta a posição para centralizar o ícone verticalmente
+    transform: [{ translateY: -5 }],
   },
 });
+

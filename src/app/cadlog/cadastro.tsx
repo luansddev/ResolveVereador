@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Image,
@@ -11,80 +11,278 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFonts } from 'expo-font';
+import { Picker } from '@react-native-picker/picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
-// ETAPA 1: Componente de Dados Pessoais
-// Definido fora do componente principal para evitar re-renderizações que fecham o teclado.
-const Step1 = ({ fullName, setFullName, cpf, setCpf, email, setEmail, nextStep }) => (
-  <>
-    <Text style={styles.label}>Nome completo:</Text>
-    <TextInput
-      style={styles.input}
-      placeholder="Seu nome completo"
-      value={fullName}
-      onChangeText={setFullName}
-      autoCapitalize="words"
-      placeholderTextColor="#a0a0a0"
-    />
-    <Text style={styles.label}>CPF:</Text>
-    <TextInput
-      style={styles.input}
-      placeholder="000.000.000-00"
-      value={cpf}
-      onChangeText={setCpf}
-      keyboardType="numeric"
-      maxLength={14}
-      placeholderTextColor="#a0a0a0"
-    />
-    <Text style={styles.label}>E-mail:</Text>
-    <TextInput
-      style={styles.input}
-      placeholder="seu.email@example.com"
-      value={email}
-      onChangeText={setEmail}
-      keyboardType="email-address"
-      autoCapitalize="none"
-      placeholderTextColor="#a0a0a0"
-    />
-    <TouchableOpacity style={styles.button} onPress={nextStep}>
-      <Text style={styles.buttonText}>Próximo</Text>
-    </TouchableOpacity>
-  </>
-);
+// --- FUNÇÕES DE VALIDAÇÃO E FORMATAÇÃO ---
 
-// ETAPA 2: Componente de Endereço
-const Step2 = ({ street, setStreet, number, setNumber, neighborhood, setNeighborhood, city, setCity, state, setState, zipCode, setZipCode, nextStep, prevStep }) => (
-  <>
-    <Text style={styles.sectionTitle}>Endereço Completo</Text>
-    <Text style={styles.label}>Rua:</Text>
-    <TextInput style={styles.input} placeholder="Nome da rua/avenida" value={street} onChangeText={setStreet} autoCapitalize="words" placeholderTextColor="#a0a0a0" />
-    <Text style={styles.label}>Número:</Text>
-    <TextInput style={styles.input} placeholder="Ex: 123" value={number} onChangeText={setNumber} keyboardType="numeric" placeholderTextColor="#a0a0a0" />
-    <Text style={styles.label}>Bairro:</Text>
-    <TextInput style={styles.input} placeholder="Nome do bairro" value={neighborhood} onChangeText={setNeighborhood} autoCapitalize="words" placeholderTextColor="#a0a0a0" />
-    <Text style={styles.label}>Cidade:</Text>
-    <TextInput style={styles.input} placeholder="Nome da cidade" value={city} onChangeText={setCity} autoCapitalize="words" placeholderTextColor="#a0a0a0" />
-    <Text style={styles.label}>Estado:</Text>
-    <TextInput style={styles.input} placeholder="Ex: SP (sigla)" value={state} onChangeText={setState} autoCapitalize="characters" maxLength={2} placeholderTextColor="#a0a0a0" />
-    <Text style={styles.label}>CEP:</Text>
-    <TextInput style={styles.input} placeholder="00000-000" value={zipCode} onChangeText={setZipCode} keyboardType="numeric" maxLength={9} placeholderTextColor="#a0a0a0" />
-    
-    <View style={styles.buttonGroup}>
-      <TouchableOpacity style={[styles.button, styles.buttonSecondary]} onPress={prevStep}>
-        <Text style={[styles.buttonText, styles.buttonTextSecondary]}>Voltar</Text>
+const validateEmail = (email) => {
+  const re = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+  return re.test(String(email).toLowerCase());
+};
+
+const formatCpf = (cpf) => {
+  const cleanedCpf = cpf.replace(/\D/g, '');
+  return cleanedCpf
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+};
+
+const formatCep = (cep) => {
+  const cleanedCep = cep.replace(/\D/g, '');
+  return cleanedCep
+    .replace(/(\d{5})(\d)/, '$1-$2');
+};
+
+const formatPhoneNumber = (phoneNumber) => {
+  const cleaned = ('' + phoneNumber).replace(/\D/g, '');
+  const match = cleaned.match(/^(\d{2})(\d{5})(\d{4})$/);
+  if (match) {
+    return `(${match[1]}) ${match[2]}-${match[3]}`;
+  }
+  return phoneNumber;
+};
+
+// --- COMPONENTES DAS ETAPAS ---
+
+const Step1 = ({
+  fullName, setFullName, cpf, setCpf, email, setEmail,
+  dateOfBirth, setDateOfBirth, showDatePicker, setShowDatePicker,
+  cellPhone, setCellPhone, id_gender, setId_gender,
+  nextStep, isNextDisabled
+}) => {
+  const onChangeDate = (event, selectedDate) => {
+    const currentDate = selectedDate || dateOfBirth;
+    setShowDatePicker(Platform.OS === 'ios' ? false : false); 
+    setDateOfBirth(currentDate);
+  };
+
+  return (
+    <>
+      <Text style={styles.sectionTitle}>Dados Pessoais</Text>
+      <Text style={styles.label}>Nome completo:</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Seu nome completo"
+        value={fullName}
+        onChangeText={setFullName}
+        autoCapitalize="words"
+        placeholderTextColor="#a0a0a0"
+      />
+      <Text style={styles.label}>CPF:</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="000.000.000-00"
+        value={cpf}
+        onChangeText={(text) => setCpf(formatCpf(text))}
+        keyboardType="numeric"
+        maxLength={14}
+        placeholderTextColor="#a0a0a0"
+      />
+      <Text style={styles.label}>E-mail:</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="seu.email@example.com"
+        value={email}
+        onChangeText={setEmail}
+        keyboardType="email-address"
+        autoCapitalize="none"
+        placeholderTextColor="#a0a0a0"
+      />
+      
+      <Text style={styles.label}>Data de Nascimento:</Text>
+      <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.inputDate}>
+        <Text style={{ color: dateOfBirth ? '#333' : '#a0a0a0', fontSize: 16, fontFamily: "fontai" }}>
+          {dateOfBirth ? dateOfBirth.toLocaleDateString('pt-BR') : 'DD/MM/AAAA'}
+        </Text>
       </TouchableOpacity>
-      <TouchableOpacity style={[styles.button, styles.buttonPrimary]} onPress={nextStep}>
+      {showDatePicker && (
+        <DateTimePicker
+          testID="dateTimePicker"
+          value={dateOfBirth || new Date()}
+          mode="date"
+          display="default"
+          onChange={onChangeDate}
+          maximumDate={new Date()}
+        />
+      )}
+
+      <Text style={styles.label}>Celular:</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="(XX) XXXXX-XXXX"
+        value={cellPhone}
+        onChangeText={(text) => setCellPhone(formatPhoneNumber(text))}
+        keyboardType="phone-pad"
+        maxLength={15}
+        placeholderTextColor="#a0a0a0"
+      />
+      
+      <Text style={styles.label}>Gênero:</Text>
+      <View style={styles.pickerContainer}>
+        <Picker
+          selectedValue={id_gender}
+          onValueChange={(itemValue) => setId_gender(itemValue)}
+          style={styles.picker}
+          itemStyle={styles.pickerItem}
+        >
+          <Picker.Item label="Selecione o gênero" value={null} />
+          <Picker.Item label="Feminino" value={1} />
+          <Picker.Item label="Masculino" value={2} />
+          <Picker.Item label="Outro" value={3} />
+        </Picker>
+      </View>
+
+      <TouchableOpacity
+        style={[styles.button, isNextDisabled && styles.buttonDisabled]}
+        onPress={nextStep}
+        disabled={isNextDisabled}
+      >
         <Text style={styles.buttonText}>Próximo</Text>
       </TouchableOpacity>
-    </View>
-  </>
-);
+    </>
+  );
+};
 
-// ETAPA 3: Componente de Senha
-const Step3 = ({ password, setPassword, confirmPassword, setConfirmPassword, prevStep, handleRegister }) => (
+const Step2 = ({
+  street, setStreet, number, setNumber, neighborhood, setNeighborhood,
+  complement, setComplement,
+  city, setCity, state, setState, zipCode, setZipCode,
+  id_state, setId_state, id_city, setId_city,
+  states, cities, loadingStates, loadingCities,
+  fetchCepData, nextStep, prevStep, isNextDisabled
+}) => {
+  const handleZipCodeChange = (text) => {
+    setZipCode(formatCep(text));
+  };
+
+  const handleZipCodeBlur = () => {
+    if (zipCode.replace(/\D/g, '').length === 8) {
+      fetchCepData(zipCode);
+    }
+  };
+
+  return (
+    <>
+      <Text style={styles.sectionTitle}>Endereço Completo</Text>
+      <Text style={styles.label}>CEP:</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="00000-000"
+        value={zipCode}
+        onChangeText={handleZipCodeChange}
+        keyboardType="numeric"
+        maxLength={9}
+        placeholderTextColor="#a0a0a0"
+        onBlur={handleZipCodeBlur}
+      />
+      <Text style={styles.label}>Rua:</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Nome da rua/avenida"
+        value={street}
+        onChangeText={setStreet}
+        autoCapitalize="words"
+        placeholderTextColor="#a0a0a0"
+      />
+      <Text style={styles.label}>Número:</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Ex: 123"
+        value={number}
+        onChangeText={setNumber}
+        keyboardType="numeric"
+        placeholderTextColor="#a0a0a0"
+      />
+      <Text style={styles.label}>Bairro:</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Nome do bairro"
+        value={neighborhood}
+        onChangeText={setNeighborhood}
+        autoCapitalize="words"
+        placeholderTextColor="#a0a0a0"
+      />
+      <Text style={styles.label}>Complemento (opcional):</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Apartamento, bloco, etc."
+        value={complement}
+        onChangeText={setComplement}
+        autoCapitalize="words"
+        placeholderTextColor="#a0a0a0"
+      />
+
+      <Text style={styles.label}>Estado:</Text>
+      <View style={styles.pickerContainer}>
+        {loadingStates ? (
+          <ActivityIndicator size="small" color="#007bff" />
+        ) : (
+          <Picker
+            selectedValue={id_state}
+            onValueChange={(itemValue) => {
+              setId_state(itemValue);
+              const selectedStateObj = states.find(s => s.id === itemValue);
+              setState(selectedStateObj ? selectedStateObj.sigla : '');
+            }}
+            style={styles.picker}
+            itemStyle={styles.pickerItem}
+          >
+            <Picker.Item label="Selecione um estado" value={null} />
+            {states.map((s) => (
+              <Picker.Item key={s.id} label={s.nome} value={s.id} />
+            ))}
+          </Picker>
+        )}
+      </View>
+
+      <Text style={styles.label}>Cidade:</Text>
+      <View style={styles.pickerContainer}>
+        {loadingCities ? (
+          <ActivityIndicator size="small" color="#007bff" />
+        ) : (
+          <Picker
+            selectedValue={id_city}
+            onValueChange={(itemValue) => {
+              setId_city(itemValue);
+              const selectedCityObj = cities.find(c => c.id === itemValue);
+              setCity(selectedCityObj ? selectedCityObj.nome : '');
+            }}
+            style={styles.picker}
+            itemStyle={styles.pickerItem}
+            enabled={id_state !== null}
+          >
+            <Picker.Item label="Selecione uma cidade" value={null} />
+            {cities.map((c) => (
+              <Picker.Item key={c.id} label={c.nome} value={c.id} />
+            ))}
+          </Picker>
+        )}
+      </View>
+      
+      <View style={styles.buttonGroup}>
+        <TouchableOpacity style={[styles.button, styles.buttonSecondary]} onPress={prevStep}>
+          <Text style={[styles.buttonText, styles.buttonTextSecondary]}>Voltar</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.button, styles.buttonPrimary, isNextDisabled && styles.buttonDisabled]}
+          onPress={nextStep}
+          disabled={isNextDisabled}
+        >
+          <Text style={styles.buttonText}>Próximo</Text>
+        </TouchableOpacity>
+      </View>
+    </>
+  );
+};
+
+const Step3 = ({ password, setPassword, confirmPassword, setConfirmPassword, prevStep, handleRegister, isNextDisabled, isRegistering }) => (
   <>
     <Text style={styles.sectionTitle}>Crie sua Senha</Text>
     <Text style={styles.label}>Senha:</Text>
@@ -111,91 +309,241 @@ const Step3 = ({ password, setPassword, confirmPassword, setConfirmPassword, pre
       <TouchableOpacity style={[styles.button, styles.buttonSecondary]} onPress={prevStep}>
         <Text style={[styles.buttonText, styles.buttonTextSecondary]}>Voltar</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={[styles.button, styles.buttonPrimary]} onPress={handleRegister}>
-        <Text style={styles.buttonText}>Cadastrar</Text>
+      <TouchableOpacity
+        style={[styles.button, styles.buttonPrimary, (isNextDisabled || isRegistering) && styles.buttonDisabled]}
+        onPress={handleRegister}
+        disabled={isNextDisabled || isRegistering}
+      >
+        {isRegistering ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : (
+          <Text style={styles.buttonText}>Cadastrar</Text>
+        )}
       </TouchableOpacity>
     </View>
   </>
 );
 
-
 export default function Cadastro() {
-  // Estado para controlar a etapa atual do formulário
+  const router = useRouter();
+
   const [step, setStep] = useState(1);
 
-  // Estados para todos os campos do formulário
   const [fullName, setFullName] = useState('');
   const [cpf, setCpf] = useState('');
   const [email, setEmail] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [cellPhone, setCellPhone] = useState('');
+  const [id_gender, setId_gender] = useState(null);
   const [street, setStreet] = useState('');
   const [number, setNumber] = useState('');
   const [neighborhood, setNeighborhood] = useState('');
+  const [complement, setComplement] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [zipCode, setZipCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // Carregamento das fontes
+  const [states, setStates] = useState([]);
+  const [cities, setCities] = useState([]);
+  const [id_state, setId_state] = useState(null);
+  const [id_city, setId_city] = useState(null);
+  const [loadingStates, setLoadingStates] = useState(false);
+  const [loadingCities, setLoadingCities] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
+
   const [fontsLoaded] = useFonts({
     'fontuda': require('../../../assets/fonts/SpaceGrotesk-Regular.ttf'),
     'fontudo': require('../../../assets/fonts/SpaceGrotesk-Bold.ttf'),
     'fontai': require('../../../assets/fonts/SpaceGrotesk-Regular.ttf'),
   });
 
+  useEffect(() => {
+    async function fetchStates() {
+      setLoadingStates(true);
+      try {
+        const response = await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/estados?orderBy=nome');
+        const data = await response.json();
+        setStates(data);
+      } catch (error) {
+        console.error('Erro ao buscar estados:', error);
+        Alert.alert('Erro', 'Não foi possível carregar a lista de estados.');
+      } finally {
+        setLoadingStates(false);
+      }
+    }
+    fetchStates();
+  }, []);
+
+  useEffect(() => {
+    if (id_state) {
+      async function fetchCities() {
+        setLoadingCities(true);
+        try {
+          const response = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${id_state}/municipios?orderBy=nome`);
+          const data = await response.json();
+          setCities(data);
+          setId_city(null);
+          setCity('');
+        } catch (error) {
+          console.error('Erro ao buscar cidades:', error);
+          Alert.alert('Erro', 'Não foi possível carregar a lista de cidades.');
+        } finally {
+          setLoadingCities(false);
+        }
+      }
+      fetchCities();
+    } else {
+      setCities([]);
+      setId_city(null);
+      setCity('');
+    }
+  }, [id_state]);
+
+  const fetchCepData = async (cep) => {
+    const cleanedCep = cep.replace(/\D/g, '');
+    if (cleanedCep.length !== 8) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cleanedCep}/json/`);
+      const data = await response.json();
+
+      if (data.erro) {
+        Alert.alert('CEP Não Encontrado', 'O CEP digitado não foi encontrado.');
+        return;
+      }
+
+      setStreet(data.logradouro);
+      setNeighborhood(data.bairro);
+      setCity(data.localidade);
+      setState(data.uf);
+
+      const foundState = states.find(s => s.sigla === data.uf);
+      if (foundState) {
+        setId_state(foundState.id);
+      } else {
+        setId_state(null);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar CEP:', error);
+      Alert.alert('Erro', 'Não foi possível buscar os dados do CEP.');
+    }
+  };
+
   if (!fontsLoaded) {
     return <Text>Carregando...</Text>;
   }
 
-  // Função para avançar para a próxima etapa
-  const nextStep = () => {
-    if (step === 1 && (!fullName || !cpf || !email)) {
-        Alert.alert('Campos Incompletos', 'Por favor, preencha todos os dados pessoais.');
-        return;
+  const isStep1Valid = fullName.trim() !== '' &&
+    cpf.replace(/\D/g, '').length === 11 &&
+    validateEmail(email) &&
+    dateOfBirth !== null &&
+    cellPhone.replace(/\D/g, '').length >= 10 &&
+    id_gender !== null;
+
+  const isStep2Valid = street.trim() !== '' &&
+    number.trim() !== '' &&
+    neighborhood.trim() !== '' &&
+    city.trim() !== '' &&
+    state.trim() !== '' &&
+    id_state !== null &&
+    id_city !== null &&
+    zipCode.replace(/\D/g, '').length === 8;
+
+  const isStep3Valid = password.length >= 6 && password === confirmPassword;
+
+  const nextStepHandler = () => {
+    if (step === 1 && !isStep1Valid) {
+      return;
     }
-    if (step === 2 && (!street || !number || !neighborhood || !city || !state || !zipCode)) {
-        Alert.alert('Campos Incompletos', 'Por favor, preencha o endereço completo.');
-        return;
+    if (step === 2 && !isStep2Valid) {
+      return;
     }
     setStep(currentStep => currentStep + 1);
   };
 
-  // Função para voltar para a etapa anterior
-  const prevStep = () => {
-    setStep(currentStep => currentStep - 1);
-  };
+  const prevStepHandler = () => setStep(currentStep => currentStep - 1);
 
-  // Função final para registrar o usuário
-  const handleRegister = () => {
-    if (password !== confirmPassword) {
-      Alert.alert('Erro no Cadastro', 'A senha e a confirmação de senha não coincidem.');
-      return;
-    }
-     if (password.length < 6) {
-      Alert.alert('Senha Inválida', 'A senha deve ter no mínimo 6 caracteres.');
+  const handleRegister = async () => {
+    if (!isStep3Valid) {
       return;
     }
 
-    Alert.alert(
-      'Cadastro Realizado!',
-      `
-      Nome Completo: ${fullName}
-      CPF: ${cpf}
-      E-mail: ${email}
-      Endereço:
-        Rua: ${street}, Nº: ${number}
-        Bairro: ${neighborhood}
-        Cidade: ${city}, Estado: ${state}
-        CEP: ${zipCode}
-      `
-    );
-    console.log({
-      fullName, cpf, email, password,
-      street, number, neighborhood, city, state, zipCode,
-    });
+    setIsRegistering(true);
+
+    const formatDate = (date) => {
+      if (!date) return '';
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
+    };
+
+    const userData = {
+      name: fullName,
+      cpf: cpf.replace(/\D/g, ''),
+      date_birth: formatDate(dateOfBirth),
+      email: email,
+      cell_phone: cellPhone,
+      password: password,
+      is_parliament: false,
+      id_gender: id_gender,
+      status: true,
+      zipcode: zipCode,
+      address: street,
+      number: number,
+      complement: complement.trim() !== '' ? complement : null,
+      neighborhood: neighborhood,
+      id_state: id_state,
+      id_city: id_city,
+    };
+    
+    console.log('Enviando dados do usuário (com CPF corrigido):', JSON.stringify(userData, null, 2));
+
+    try {
+      const API_URL = 'https://resolvevereador.com.br/api/users/store';
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(userData),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Erro do servidor: ${response.status} - ${errorText}`);
+      }
+      
+      const data = await response.json();
+
+      if (data.code === 201) {
+        Alert.alert('Sucesso', data.message || 'Usuário cadastrado com sucesso!');
+        router.replace('/login');
+      } else {
+        Alert.alert('Erro no Cadastro', data.message || 'Ocorreu um erro no cadastro. Verifique os dados.');
+        console.error('Erro da API:', data);
+      }
+    } catch (error) {
+      console.error('Erro na requisição de cadastro:', error);
+      Alert.alert('Erro de Conexão', 'Não foi possível se conectar ao servidor. Verifique sua internet ou tente novamente mais tarde.');
+    } finally {
+      setIsRegistering(false);
+    }
   };
 
   return (
+    <LinearGradient
+      colors={['#4c669f', '#3b5998', '#192f6a']}
+      style={styles.fullScreenGradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+    >
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
           style={styles.keyboardAvoidingView}
@@ -216,19 +564,56 @@ export default function Cadastro() {
               <Text style={styles.title}>Cadastre-se</Text>
               
               <View style={styles.progressContainer}>
-                  <View style={[styles.progressStep, step >= 1 && styles.progressStepActive]} />
-                  <View style={[styles.progressStep, step >= 2 && styles.progressStepActive]} />
-                  <View style={[styles.progressStep, step >= 3 && styles.progressStepActive]} />
+                <View style={[styles.progressStep, step >= 1 && styles.progressStepActive]} />
+                <View style={[styles.progressStep, step >= 2 && styles.progressStepActive]} />
+                <View style={[styles.progressStep, step >= 3 && styles.progressStepActive]} />
               </View>
 
-              {/* Renderiza a etapa correta passando os estados e funções como props */}
-              {step === 1 && <Step1 fullName={fullName} setFullName={setFullName} cpf={cpf} setCpf={setCpf} email={email} setEmail={setEmail} nextStep={nextStep} />}
-              {step === 2 && <Step2 street={street} setStreet={setStreet} number={number} setNumber={setNumber} neighborhood={neighborhood} setNeighborhood={setNeighborhood} city={city} setCity={setCity} state={state} setState={setState} zipCode={zipCode} setZipCode={setZipCode} nextStep={nextStep} prevStep={prevStep} />}
-              {step === 3 && <Step3 password={password} setPassword={setPassword} confirmPassword={confirmPassword} setConfirmPassword={setConfirmPassword} prevStep={prevStep} handleRegister={handleRegister} />}
+              {step === 1 && <Step1
+                fullName={fullName} setFullName={setFullName}
+                cpf={cpf} setCpf={setCpf}
+                email={email} setEmail={setEmail}
+                dateOfBirth={dateOfBirth} setDateOfBirth={setDateOfBirth}
+                showDatePicker={showDatePicker} setShowDatePicker={setShowDatePicker}
+                cellPhone={cellPhone} setCellPhone={setCellPhone}
+                id_gender={id_gender} setId_gender={setId_gender}
+                nextStep={nextStepHandler}
+                isNextDisabled={!isStep1Valid}
+              />}
+              {step === 2 && <Step2
+                street={street} setStreet={setStreet}
+                number={number} setNumber={setNumber}
+                neighborhood={neighborhood} setNeighborhood={setNeighborhood}
+                complement={complement} setComplement={setComplement}
+                city={city} setCity={setCity}
+                state={state} setState={setState}
+                zipCode={zipCode} setZipCode={setZipCode}
+                id_state={id_state} setId_state={setId_state}
+                id_city={id_city} setId_city={setId_city}
+                states={states} cities={cities}
+                loadingStates={loadingStates} loadingCities={loadingCities}
+                fetchCepData={fetchCepData}
+                nextStep={nextStepHandler} prevStep={prevStepHandler}
+                isNextDisabled={!isStep2Valid}
+              />}
+              {step === 3 && <Step3
+                password={password} setPassword={setPassword}
+                confirmPassword={confirmPassword} setConfirmPassword={setConfirmPassword}
+                prevStep={prevStepHandler} handleRegister={handleRegister}
+                isNextDisabled={!isStep3Valid || isRegistering}
+                isRegistering={isRegistering}
+              />}
+              {isRegistering && (
+                <View style={styles.loadingOverlay}>
+                  <ActivityIndicator size="large" color="#007bff" />
+                  <Text style={styles.loadingText}>Cadastrando...</Text>
+                </View>
+              )}
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+    </LinearGradient>
   );
 }
 
@@ -238,7 +623,6 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-    backgroundColor: "#2f6f8f"
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -328,6 +712,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f8f8',
     fontFamily: "fontai",
   },
+  inputDate: {
+    width: '100%',
+    height: 50,
+    borderColor: '#ddd',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 15,
+    fontSize: 16,
+    color: '#333',
+    backgroundColor: '#f8f8f8',
+    fontFamily: "fontai",
+    justifyContent: "center",
+  },
   sectionTitle: {
     fontSize: 22,
     color: '#333',
@@ -352,10 +749,15 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: "fontudo",
   },
+  buttonDisabled: {
+    backgroundColor: '#cccccc',
+    opacity: 0.7,
+  },
   buttonGroup: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 30,
+    gap: 10,
   },
   buttonPrimary: {
     backgroundColor: '#0090a9ff',
@@ -370,6 +772,41 @@ const styles = StyleSheet.create({
     marginRight: 5,
   },
   buttonTextSecondary: {
-      color: '#0090a9ff',
-  }
+    color: '#0090a9ff',
+  },
+  pickerContainer: {
+    width: '100%',
+    height: 50,
+    borderColor: '#ddd',
+    borderWidth: 1,
+    borderRadius: 8,
+    backgroundColor: '#f8f8f8',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  picker: {
+    width: '100%',
+    height: 50,
+    color: '#333',
+  },
+  pickerItem: {
+    fontSize: 16,
+    fontFamily: "fontai",
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 15,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#333',
+  },
 });
