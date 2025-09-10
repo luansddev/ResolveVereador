@@ -13,39 +13,40 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
+import { useAuth } from '../../context/AuthContext';
 
-// --- Funções de formatação ---
+// --- Funções de formatação (sem alterações) ---
 const formatInputDate = (dateString) => {
-  const cleaned = dateString.replace(/\D/g, '');
-  if (cleaned.length > 8) return cleaned.substring(0, 8).replace(/(\d{2})(\d{2})(\d{4})/, '$1/$2/$3');
-  if (cleaned.length > 4) return cleaned.replace(/(\d{2})(\d{2})(\d{1,4})/, '$1/$2/$3');
-  if (cleaned.length > 2) return cleaned.replace(/(\d{2})(\d{1,2})/, '$1/$2');
-  return cleaned;
+    const cleaned = dateString.replace(/\D/g, '');
+    if (cleaned.length > 8) return cleaned.substring(0, 8).replace(/(\d{2})(\d{2})(\d{4})/, '$1/$2/$3');
+    if (cleaned.length > 4) return cleaned.replace(/(\d{2})(\d{2})(\d{1,4})/, '$1/$2/$3');
+    if (cleaned.length > 2) return cleaned.replace(/(\d{2})(\d{1,2})/, '$1/$2');
+    return cleaned;
 };
 const isValidDate = (dateString) => {
-  const regex = /^\d{2}\/\d{2}\/\d{4}$/;
-  if (!regex.test(dateString)) return false;
-  const [day, month, year] = dateString.split('/').map(Number);
-  const date = new Date(year, month - 1, day);
-  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day && date <= new Date();
+    const regex = /^\d{2}\/\d{2}\/\d{4}$/;
+    if (!regex.test(dateString)) return false;
+    const [day, month, year] = dateString.split('/').map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day && date <= new Date();
 };
 const formatInputTime = (timeString) => {
-  const cleaned = timeString.replace(/\D/g, '');
-  if (cleaned.length > 4) return cleaned.substring(0, 4).replace(/(\d{2})(\d{2})/, '$1:$2');
-  if (cleaned.length > 2) return cleaned.replace(/(\d{2})(\d{1,2})/, '$1:$2');
-  return cleaned;
+    const cleaned = timeString.replace(/\D/g, '');
+    if (cleaned.length > 4) return cleaned.substring(0, 4).replace(/(\d{2})(\d{2})/, '$1:$2');
+    if (cleaned.length > 2) return cleaned.replace(/(\d{2})(\d{1,2})/, '$1:$2');
+    return cleaned;
 };
 const isValidTime = (timeString) => {
-  const regex = /^\d{2}:\d{2}$/;
-  if (!regex.test(timeString)) return false;
-  const [hours, minutes] = timeString.split(':').map(Number);
-  return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
+    const regex = /^\d{2}:\d{2}$/;
+    if (!regex.test(timeString)) return false;
+    const [hours, minutes] = timeString.split(':').map(Number);
+    return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
 };
 
 // --- COMPONENTES DAS ETAPAS ---
@@ -56,52 +57,24 @@ const Step1 = ({ date, setDate, time, setTime, nextStep, isNextDisabled }) => (
     <Text style={styles.label}>Data:</Text>
     <View style={styles.inputContainer}>
       <Feather name="calendar" size={20} color="#666" style={styles.inputIcon} />
-      <TextInput
-        style={[styles.input, styles.inputWithIcon]}
-        placeholder="DD/MM/AAAA"
-        value={date}
-        onChangeText={(text) => setDate(formatInputDate(text))}
-        keyboardType="numeric"
-        maxLength={10}
-        placeholderTextColor="#a0a0a0"
-      />
+      <TextInput style={[styles.input, styles.inputWithIcon]} placeholder="DD/MM/AAAA" value={date} onChangeText={(text) => setDate(formatInputDate(text))} keyboardType="numeric" maxLength={10} placeholderTextColor="#a0a0a0" />
     </View>
     <Text style={styles.label}>Hora:</Text>
     <View style={styles.inputContainer}>
       <Feather name="clock" size={20} color="#666" style={styles.inputIcon} />
-      <TextInput
-        style={[styles.input, styles.inputWithIcon]}
-        placeholder="HH:MM"
-        value={time}
-        onChangeText={(text) => setTime(formatInputTime(text))}
-        keyboardType="numeric"
-        maxLength={5}
-        placeholderTextColor="#a0a0a0"
-      />
+      <TextInput style={[styles.input, styles.inputWithIcon]} placeholder="HH:MM" value={time} onChangeText={(text) => setTime(formatInputTime(text))} keyboardType="numeric" maxLength={5} placeholderTextColor="#a0a0a0" />
     </View>
-    <TouchableOpacity
-      style={[styles.button, isNextDisabled && styles.buttonDisabled]}
-      onPress={nextStep}
-      disabled={isNextDisabled}
-    >
+    <TouchableOpacity style={[styles.button, styles.buttonPrimary, { alignSelf: 'stretch' }, isNextDisabled && styles.buttonDisabled]} onPress={nextStep} disabled={isNextDisabled}>
       <Text style={styles.buttonText}>Próximo</Text>
     </TouchableOpacity>
   </>
 );
 
 const Step2 = ({
-  locationText,
-  setLocationText,
-  mapRegion,
-  markerCoordinate,
-  setMarkerCoordinate,
-  isMapLoading,
-  mapRef,
-  handleSearchAddress,
-  isGeocoding,
-  nextStep,
-  prevStep,
-  isNextDisabled,
+  locationText, setLocationText,
+  mapRegion, markerCoordinate, setMarkerCoordinate,
+  isMapLoading, mapRef, handleSearchAddress, isGeocoding,
+  nextStep, prevStep, isNextDisabled
 }) => {
   const handleMapPress = (e) => {
     const { latitude, longitude } = e.nativeEvent.coordinate;
@@ -113,59 +86,50 @@ const Step2 = ({
       <Text style={styles.sectionTitle}>Localização</Text>
       <Text style={styles.label}>Pesquise o endereço:</Text>
       <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Digite um endereço..."
-          value={locationText}
-          onChangeText={setLocationText}
-          autoCapitalize="words"
+        <TextInput 
+          style={styles.searchInput} 
+          placeholder="Digite um endereço..." 
+          value={locationText} 
+          onChangeText={setLocationText} 
+          autoCapitalize="words" 
           placeholderTextColor="#a0a0a0"
           returnKeyType="search"
           onSubmitEditing={() => handleSearchAddress(locationText)}
         />
-        <TouchableOpacity
-          style={styles.searchButton}
-          onPress={() => handleSearchAddress(locationText)}
-          disabled={isGeocoding}
-        >
-          {isGeocoding ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Feather name="search" size={20} color="#fff" />
-          )}
+        <TouchableOpacity style={styles.searchButton} onPress={() => handleSearchAddress(locationText)} disabled={isGeocoding}>
+          {isGeocoding ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="search" size={20} color="#fff" />}
         </TouchableOpacity>
       </View>
-
+      
       <Text style={styles.label}>Ajuste o local exato no mapa:</Text>
-
+      
       <View style={styles.mapContainer}>
         {isMapLoading ? (
           <ActivityIndicator size="large" color="#007bff" />
         ) : (
           mapRegion && (
-            <MapView
+            <MapView 
               ref={mapRef}
-              style={styles.map}
+              style={styles.map} 
               initialRegion={mapRegion}
               onPress={handleMapPress}
             >
               {markerCoordinate && (
-                <Marker coordinate={markerCoordinate} title="Local da Ocorrência" />
+                <Marker
+                  coordinate={markerCoordinate}
+                  title="Local da Ocorrência"
+                />
               )}
             </MapView>
           )
         )}
       </View>
-
+      
       <View style={styles.buttonGroup}>
         <TouchableOpacity style={[styles.button, styles.buttonSecondary]} onPress={prevStep}>
           <Text style={[styles.buttonText, styles.buttonTextSecondary]}>Voltar</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.button, styles.buttonPrimary, isNextDisabled && styles.buttonDisabled]}
-          onPress={nextStep}
-          disabled={isNextDisabled}
-        >
+        <TouchableOpacity style={[styles.button, styles.buttonPrimary, isNextDisabled && styles.buttonDisabled]} onPress={nextStep} disabled={isNextDisabled}>
           <Text style={styles.buttonText}>Próximo</Text>
         </TouchableOpacity>
       </View>
@@ -174,13 +138,10 @@ const Step2 = ({
 };
 
 const Step3 = ({
-  description,
-  setDescription,
-  prevStep,
-  handlePublish,
-  isNextDisabled,
-  images,
-  pickImage,
+  description, setDescription,
+  prevStep, handlePublish,
+  isNextDisabled, isPublishing,
+  images, pickImage,
 }) => (
   <>
     <Text style={styles.sectionTitle}>Descrição e Fotos</Text>
@@ -195,7 +156,7 @@ const Step3 = ({
       textAlignVertical="top"
       placeholderTextColor="#a0a0a0"
     />
-    <Text style={styles.label}>Adicione fotos (opcional):</Text>
+    <Text style={styles.label}>Adicione até 4 fotos (opcional):</Text>
     <View style={styles.photoUploadContainer}>
       {images.map((img, index) => (
         <TouchableOpacity
@@ -216,29 +177,38 @@ const Step3 = ({
         <Text style={[styles.buttonText, styles.buttonTextSecondary]}>Voltar</Text>
       </TouchableOpacity>
       <TouchableOpacity
-        style={[styles.button, styles.buttonPrimary, isNextDisabled && styles.buttonDisabled]}
+        style={[styles.button, styles.buttonPrimary, (isNextDisabled || isPublishing) && styles.buttonDisabled]}
         onPress={handlePublish}
-        disabled={isNextDisabled}
+        disabled={isNextDisabled || isPublishing}
       >
-        <Text style={styles.buttonText}>Publicar</Text>
+        {isPublishing ? (
+            <ActivityIndicator size="small" color="#fff"/>
+        ) : (
+            <Text style={styles.buttonText}>Publicar</Text>
+        )}
       </TouchableOpacity>
     </View>
   </>
 );
 
+
 // --- COMPONENTE PRINCIPAL ---
 export default function AddOcorrencia() {
+  const router = useRouter();
+  const { user, token } = useAuth(); 
+
   const [step, setStep] = useState(1);
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [locationText, setLocationText] = useState('');
   const [description, setDescription] = useState('');
-  const [images, setImages] = useState([null, null]);
+  const [images, setImages] = useState([null, null, null, null]); 
 
   const [mapRegion, setMapRegion] = useState(null);
   const [markerCoordinate, setMarkerCoordinate] = useState(null);
   const [isMapLoading, setIsMapLoading] = useState(true);
   const [isGeocoding, setIsGeocoding] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
 
   const mapRef = useRef(null);
 
@@ -246,10 +216,7 @@ export default function AddOcorrencia() {
     const requestLocation = async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
-          'Permissão Negada',
-          'Para adicionar uma ocorrência, precisamos da sua permissão para acessar a localização.'
-        );
+        Alert.alert('Permissão Negada', 'Para adicionar uma ocorrência, precisamos da sua permissão para acessar a localização.');
         setIsMapLoading(false);
         return;
       }
@@ -266,7 +233,7 @@ export default function AddOcorrencia() {
         setMapRegion(region);
         setMarkerCoordinate({ latitude, longitude });
       } catch (error) {
-        Alert.alert('Erro de Localização', 'Não foi possível obter sua localização atual.');
+          Alert.alert('Erro de Localização', 'Não foi possível obter sua localização atual.');
       } finally {
         setIsMapLoading(false);
       }
@@ -294,10 +261,7 @@ export default function AddOcorrencia() {
         mapRef.current?.animateToRegion(newRegion, 1000);
         setMarkerCoordinate({ latitude, longitude });
       } else {
-        Alert.alert(
-          'Endereço não encontrado',
-          'Não foi possível encontrar o endereço especificado. Tente ser mais específico.'
-        );
+        Alert.alert('Endereço não encontrado', 'Não foi possível encontrar o endereço especificado.');
       }
     } catch (error) {
       console.error(error);
@@ -343,6 +307,13 @@ export default function AddOcorrencia() {
 
   const handlePublish = async () => {
     if (!isStep3Valid) return;
+    
+    if (!user || !token) {
+        Alert.alert('Erro de Autenticação', 'Você precisa estar logado para publicar uma ocorrência.');
+        return;
+    }
+
+    setIsPublishing(true);
 
     const formatDateTimeForAPI = (dateStr, timeStr) => {
       const [day, month, year] = dateStr.split('/');
@@ -356,49 +327,61 @@ export default function AddOcorrencia() {
     formData.append('latitude', String(markerCoordinate.latitude));
     formData.append('longitude', String(markerCoordinate.longitude));
     formData.append('description', description);
-    formData.append('status', 'true');
+    formData.append('status', '1');
     formData.append('id_situation', '1');
-    formData.append('id_user', '1'); // Placeholder
+    formData.append('id_user', String(user.id));
 
-    images.forEach((img, index) => {
-      if (img) {
-        const uriParts = img.split('.');
-        const fileType = uriParts[uriParts.length - 1];
-        formData.append('photo' + (index + 1), {
-          uri: img,
-          name: `photo${index + 1}.${fileType}`,
-          type: `image/${fileType}`,
+    // --- MUDANÇA APLICADA AQUI ---
+    const selectedImages = images.filter(img => img !== null);
+
+    if (selectedImages.length > 0) {
+        selectedImages.forEach((img) => {
+            const uriParts = img.split('.');
+            const fileType = uriParts[uriParts.length - 1];
+            const mimeType = `image/${fileType === 'jpg' ? 'jpeg' : fileType}`;
+            
+            formData.append('image[]', {
+                uri: img,
+                name: `occurrence_image.${fileType}`,
+                type: mimeType,
+            });
         });
-      }
-    });
-
-    console.log('--- Preparando para enviar FormData ---');
-    try {
-      for (let pair of formData._parts) {
-        console.log(`${pair[0]}: ${pair[1]}`);
-      }
-    } catch (e) {
-      console.log('Não foi possível logar o FormData diretamente.');
+    } else {
+        // Se nenhuma imagem for selecionada, envia o campo 'image[]' vazio para a API
+        formData.append('image[]', '');
     }
 
-    Alert.alert(
-      'Dados Prontos para Envio',
-      'Os dados foram formatados corretamente. Verifique o console para ver os detalhes.'
-    );
+    try {
+      const API_URL = 'https://www.resolvevereador.com.br/api/occurrences/store';
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.code === 201) {
+        Alert.alert('Sucesso!', 'Sua ocorrência foi publicada.');
+        router.replace('/tabs/home');
+      } else {
+        throw new Error(data.message || 'Ocorreu um erro ao publicar a ocorrência.');
+      }
+
+    } catch (error: any) {
+      console.error('Erro ao publicar ocorrência:', error);
+      Alert.alert('Erro', error.message);
+    } finally {
+        setIsPublishing(false);
+    }
   };
 
   return (
-    <LinearGradient
-      colors={['#4c669f', '#3b5998', '#192f6a']}
-      style={styles.fullScreenGradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-    >
+    <LinearGradient colors={['#4c669f', '#3b5998', '#192f6a']} style={styles.fullScreenGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
       <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView
-          style={styles.keyboardAvoidingView}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
+        <KeyboardAvoidingView style={styles.keyboardAvoidingView} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <ScrollView
             contentContainerStyle={styles.scrollViewContent}
             style={styles.scrollViewFlex}
@@ -449,6 +432,7 @@ export default function AddOcorrencia() {
                   prevStep={prevStepHandler}
                   handlePublish={handlePublish}
                   isNextDisabled={!isStep3Valid}
+                  isPublishing={isPublishing}
                   images={images}
                   pickImage={pickImage}
                 />
@@ -462,7 +446,7 @@ export default function AddOcorrencia() {
 }
 
 const styles = StyleSheet.create({
-  fullScreenGradient: { flex: 1, backgroundColor: '#04588F' },
+  fullScreenGradient: { flex: 1 },
   safeArea: { flex: 1 },
   keyboardAvoidingView: { flex: 1 },
   scrollViewFlex: { flex: 1 },
@@ -517,69 +501,110 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textAlign: 'center',
   },
-  label: { fontSize: 16, color: '#333', marginBottom: 6 },
-  inputContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
-  inputIcon: { position: 'absolute', left: 10, zIndex: 1 },
-  input: {
-    flex: 1,
-    height: 48,
+  label: { fontSize: 16, color: '#333', marginBottom: 8, marginTop: 15, fontWeight: '500' },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderColor: '#ddd',
     borderWidth: 1,
     borderRadius: 8,
-    paddingHorizontal: 40,
-    fontSize: 16,
-    backgroundColor: '#fff',
+    backgroundColor: '#f8f8f8',
+    height: 50,
+    position: 'relative',
   },
-  inputWithIcon: { paddingLeft: 40 },
+  inputIcon: { position: 'absolute', left: 15, zIndex: 1, color: '#666' },
+  input: {
+    flex: 1,
+    height: 50,
+    fontSize: 16,
+    color: '#333',
+    backgroundColor: 'transparent',
+  },
+  inputWithIcon: { paddingLeft: 45 },
   button: {
-    backgroundColor: '#04588F',
     paddingVertical: 14,
-    paddingHorizontal: 20,
     borderRadius: 10,
     alignItems: 'center',
-    marginVertical: 10,
-    elevation: 4,
+    marginTop: 20,
+    elevation: 2,
   },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  buttonDisabled: { opacity: 0.6 },
-  buttonGroup: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 },
-  buttonSecondary: { backgroundColor: '#e0e0e0', flex: 1, marginRight: 8 },
-  buttonPrimary: { flex: 1, marginLeft: 8 },
-  buttonTextSecondary: { color: '#333' },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  buttonDisabled: { opacity: 0.6, backgroundColor: '#cccccc' },
+  buttonGroup: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, gap: 10 },
+  buttonSecondary: { 
+    backgroundColor: 'transparent', 
+    borderWidth: 2, 
+    borderColor: '#007bff', 
+    flex: 1 
+  },
+  buttonPrimary: { 
+    backgroundColor: '#007bff', 
+    flex: 1 
+  },
+  buttonTextSecondary: { color: '#007bff', fontWeight: 'bold' },
   searchContainer: { flexDirection: 'row', marginBottom: 10 },
   searchInput: {
     flex: 1,
-    height: 45,
+    height: 50,
+    borderColor: '#ddd',
+    borderWidth: 1,
+    borderTopLeftRadius: 8,
+    borderBottomLeftRadius: 8,
+    paddingHorizontal: 15,
+    fontSize: 16,
+    backgroundColor: '#f8f8f8',
+  },
+  searchButton: {
+    width: 60,
+    height: 50,
+    backgroundColor: '#007bff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderTopRightRadius: 8,
+    borderBottomRightRadius: 8,
+  },
+  mapContainer: { 
+    height: 250, 
+    borderRadius: 10, 
+    overflow: 'hidden', 
+    marginVertical: 15, 
+    borderWidth: 1, 
+    borderColor: '#ccc', 
+    justifyContent: 'center', 
+    alignItems: 'center',
+  },
+  map: { ...StyleSheet.absoluteFillObject },
+  descriptionInput: {
+    height: 120,
+    padding: 15,
+    textAlignVertical: 'top',
     borderColor: '#ddd',
     borderWidth: 1,
     borderRadius: 8,
-    paddingHorizontal: 10,
-    backgroundColor: '#fff',
-    fontSize: 16,
+    backgroundColor: '#f8f8f8',
+    fontSize: 16
   },
-  searchButton: {
-    backgroundColor: '#04588F',
-    padding: 10,
-    borderRadius: 8,
-    marginLeft: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
+  photoUploadContainer: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-around', 
+    flexWrap: 'wrap',
+    marginTop: 10, 
+    marginBottom: 20 
   },
-  mapContainer: { height: 250, borderRadius: 10, overflow: 'hidden', marginVertical: 15 },
-  map: { flex: 1 },
-  descriptionInput: { height: 120, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 15 },
-  photoUploadContainer: { flexDirection: 'row', marginBottom: 15 },
   photoPlaceholder: {
-    width: 100,
-    height: 100,
+    width: '48%',
+    aspectRatio: 1,
     backgroundColor: '#f0f0f0',
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
     borderColor: '#ddd',
-    borderWidth: 1,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    overflow: 'hidden',
+    marginBottom: '4%',
   },
-  photoPlaceholderText: { color: '#888', fontSize: 28 },
-  photoPreview: { width: '100%', height: '100%', borderRadius: 8 },
+  photoPlaceholderText: { color: '#888', fontSize: 40 },
+  photoPreview: { width: '100%', height: '100%' },
 });
+

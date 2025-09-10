@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View,
-  Image, // Adicionado import para Image
+  Image,
   Text,
   TextInput,
   TouchableOpacity,
@@ -10,13 +10,27 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
-  Alert, // Para exibir mensagens, substituindo alert()
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Link } from 'expo-router';
 import { useFonts } from 'expo-font';
+import { useAuth } from '../../context/AuthContext'; // 1. Importa o hook de autenticação
+
+// Função para formatar o CPF enquanto o usuário digita
+const formatCpf = (cpf) => {
+  const cleanedCpf = cpf.replace(/\D/g, '');
+  if (cleanedCpf.length <= 11) {
+    return cleanedCpf
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  }
+  return cpf.substring(0, 14);
+};
 
 export default function Login() {
-   const [fontsLoaded] = useFonts({
+    const [fontsLoaded] = useFonts({
       'fontuda': require('../../../assets/fonts/SpaceGrotesk-Regular.ttf'),
       'fontudo': require('../../../assets/fonts/SpaceGrotesk-Bold.ttf'),
       'fontai': require('../../../assets/fonts/SpaceGrotesk-Regular.ttf'),
@@ -24,13 +38,31 @@ export default function Login() {
       if (!fontsLoaded) {
         return <Text></Text>; // Ou um loading spinner
       }
+      
   const [cpf, setCpf] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const { signIn } = useAuth(); // 2. Pega a função signIn do contexto
 
-  // A função handleLogin agora apenas loga os dados, a navegação será pelo Link
-  const handleLogin = () => {
-    console.log('Dados de Login (apenas frontend por enquanto):', { cpf, password });
-    // Futuramente, aqui você chamaria sua API de autenticação
+  // --- FUNÇÃO DE LOGIN ATUALIZADA PARA USAR O CONTEXTO ---
+  const handleLogin = async () => {
+    if (!cpf || !password) {
+      Alert.alert('Campos Vazios', 'Por favor, preencha o CPF e a senha.');
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      // 3. Chama a função signIn do contexto. O contexto agora cuida da API, 
+      // de salvar os dados e do redirecionamento automático.
+      await signIn(cpf, password);
+      // Se o login for bem-sucedido, o useEffect no AuthContext vai redirecionar.
+    } catch (error: any) {
+      // Se o signIn der erro (ex: senha errada), ele será capturado aqui.
+      Alert.alert('Erro no Login', error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleForgotPassword = () => {
@@ -38,8 +70,6 @@ export default function Login() {
       'Esqueci Minha Senha',
       'Você será redirecionado para a tela de recuperação de senha.'
     );
-    // Futuramente, você pode usar Link para navegar para uma tela de recuperação
-    // Ex: <Link href="/forgot-password" asChild>...</Link>
   };
 
   return (
@@ -49,34 +79,30 @@ export default function Login() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           <ScrollView contentContainerStyle={styles.scrollViewContent}>
-            {/* Botão para retornar à tela de índice */}
             <Link href="/" asChild>
               <TouchableOpacity style={styles.backButton}>
                 <Text style={styles.backButtonText}>{'<'}</Text>
               </TouchableOpacity>
             </Link>
 
-            {/* Nova View para centralizar a imagem */}
             <View style={styles.alignCenter}>
               <Image source={require('../../../assets/images/Resolve Vereador/Resolve Vereador 2.png')} style={styles.logo}></Image>
             </View>
 
             <View style={styles.contentWrapper}>
-              <Text style={styles.title}>Bem-vindo de volta</Text> {/* Texto do título alterado para "Entre" */}
+              <Text style={styles.title}>Bem-vindo de volta</Text>
 
-              {/* CPF */}
               <Text style={styles.label}>CPF:</Text>
               <TextInput
                 style={styles.input}
                 placeholder="000.000.000-00"
                 value={cpf}
-                onChangeText={setCpf}
+                onChangeText={(text) => setCpf(formatCpf(text))}
                 keyboardType="numeric"
                 maxLength={14}
                 placeholderTextColor="#a0a0a0"
               />
 
-              {/* Senha */}
               <Text style={styles.label}>Senha:</Text>
               <TextInput
                 style={styles.input}
@@ -88,20 +114,23 @@ export default function Login() {
                 placeholderTextColor="#a0a0a0"
               />
 
-              {/* Opção "Esqueci minha senha" */}
               <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPasswordButton}>
                 <Text style={styles.forgotPasswordText}>Esqueci minha senha</Text>
               </TouchableOpacity>
-
-              {/* Botão de Login (agora navega diretamente para Home) */}
-              <Link href="/tabs/home" asChild>
-                <TouchableOpacity style={styles.button} onPress={handleLogin}>
+              
+              <TouchableOpacity 
+                style={[styles.button, isLoading && styles.buttonDisabled]} 
+                onPress={handleLogin}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
                   <Text style={styles.buttonText}>Entrar</Text>
-                </TouchableOpacity>
-              </Link>
+                )}
+              </TouchableOpacity>
 
-              {/* Link para cadastro (opcional, mas comum) */}
-              <Link href="/cadastro" asChild>
+              <Link href="/cadlog/cadastro" asChild>
                 <TouchableOpacity style={styles.registerLink}>
                   <Text>Não tem conta? <Text style={styles.registerLinkText}>Cadastre-se</Text></Text>
                 </TouchableOpacity>
@@ -147,7 +176,7 @@ const styles = StyleSheet.create({
   },
   contentWrapper: {
     padding: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)', // Fundo semi-transparente para a caixa
+    backgroundColor: 'rgba(255, 255, 255, 0.9)', 
     borderRadius: 15,
     marginHorizontal: 20,
     shadowColor: '#000',
@@ -155,7 +184,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 10,
     elevation: 8,
-    marginTop: Platform.OS === 'ios' ? 80 : 2, // Espaço ajustado para a imagem
+    marginTop: Platform.OS === 'ios' ? 80 : 2, 
     marginBottom: 20,
   },
   title: {
@@ -200,12 +229,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 20,
-    fontFamily: "fontudo"
   },
   buttonText: {
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  buttonDisabled: {
+    backgroundColor: '#cccccc',
   },
   registerLink: {
     marginTop: 20,
@@ -223,3 +254,4 @@ const styles = StyleSheet.create({
     marginBottom: "28%"
   }
 });
+

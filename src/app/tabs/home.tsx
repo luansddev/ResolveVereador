@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,59 +7,61 @@ import {
   SafeAreaView,
   Platform,
   FlatList,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
-// A importação do 'Link' foi trocada pelo 'useRouter' para navegação programática
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import { useAuth } from '../../context/AuthContext';
+import { encode } from 'base-64'; // Importa a função para codificar em Base64
 
-// Dados de exemplo para as ocorrências
-const DUMMY_OCCURRENCES = [
-  {
-    id: '2',
-    title: 'Alagamento na Rua XV',
-    timeAgo: 'Há 1 dia',
-    severity: 'Moderado',
-    description: 'It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.',
-    iconName: 'cloud-rain',
-  },
-  {
-    id: '3',
-    title: 'Acidente na Rodovia',
-    timeAgo: 'Há 2 dias',
-    severity: 'Crítico',
-    description: 'Contrary to popular belief, Lorem Ipsum is not simply random text. It has roots in a piece of classical Latin literature from 45 BC, making it over 2000 years old. Richard McClintock, a Latin professor at Hampden-Sydney College in Virginia, looked up one of the more obscure Latin words, consectetur, from a Lorem Ipsum passage, and going through the cites of the word in classical literature, discovered the undoubtable source.',
-    iconName: 'alert-triangle',
-  },
-];
-
-// --- MUDANÇA 1: Componente OccurrenceItem atualizado ---
+// Componente individual para cada item da ocorrência
 const OccurrenceItem = ({ item }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const router = useRouter(); // Hook para navegação
+  const router = useRouter();
 
   const handleDetailsPress = () => {
-    // Navega para a tela de detalhes, passando o ID da ocorrência como parâmetro
-    // A tela de detalhes poderá usar esse ID para buscar os dados completos na API
     router.push({
       pathname: '/tabs/actions/detalhesOcorrencia',
       params: { id: item.id }
     });
   };
 
+  // Função para formatar a data que vem da API (DD/MM/YYYY HH:mm:ss)
+  // para um formato legível (DD/MM/YYYY às HH:mm)
+  const formatApiDateTime = (datetime) => {
+    if (!datetime) return 'Data indisponível';
+    try {
+      const parts = datetime.split(' ');
+      const datePart = parts[0];
+      const timePart = parts[1].substring(0, 5); // Pega apenas HH:mm
+      return `${datePart} às ${timePart}`;
+    } catch (e) {
+      return 'Data inválida';
+    }
+  };
+
+  const formattedDate = formatApiDateTime(item.datetime);
+
   return (
     <View style={styles.occurrenceCard}>
       <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)} style={styles.cardHeader}>
-        <View style={styles.iconCircle}>
-          <Feather name={item.iconName} size={24} color="white" />
-        </View>
         <View style={styles.headerTextContainer}>
-          <Text style={styles.occurrenceTitle}>{item.title}</Text>
+          {/* A API não retorna um 'title', então usamos a descrição como título */}
+          <Text style={styles.occurrenceTitle} numberOfLines={1}>
+            {item.description || 'Ocorrência sem descrição'}
+          </Text>
           <View style={styles.detailsRow}>
             <Feather name="clock" size={14} color="#666" />
-            <Text style={styles.detailText}>{item.timeAgo}</Text>
-            <Text style={styles.detailSeparator}>|</Text>
-            <Feather name="alert-circle" size={14} color="#666" />
-            <Text style={styles.detailText}>{item.severity}</Text>
+            <Text style={styles.detailText}>{formattedDate}</Text>
+            {/* O campo 'severity' foi mapeado para 'situation_title' da API */}
+            {item.situation?.situation_title && (
+              <>
+                <Text style={styles.detailSeparator}>|</Text>
+                <Feather name="alert-circle" size={14} color="#666" />
+                <Text style={styles.detailText}>{item.situation.situation_title}</Text>
+              </>
+            )}
           </View>
         </View>
         <Feather
@@ -71,8 +73,7 @@ const OccurrenceItem = ({ item }) => {
 
       {isExpanded && (
         <View style={styles.expandedContent}>
-          <Text style={styles.descriptionText} numberOfLines={3}>{item.description}</Text>
-          {/* O botão agora chama a função de navegação */}
+          <Text style={styles.descriptionText}>{item.description}</Text>
           <TouchableOpacity style={styles.detailsButton} onPress={handleDetailsPress}>
             <Text style={styles.detailsButtonText}>Ver mais detalhes</Text>
             <Feather name="arrow-right" size={18} color="white" style={{ marginLeft: 8 }} />
@@ -85,23 +86,101 @@ const OccurrenceItem = ({ item }) => {
 
 
 export default function Home() {
+  const { user, token } = useAuth();
+  const [occurrences, setOccurrences] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchOccurrences = async () => {
+    if (!user || !token) {
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // 1. Monta os filtros conforme a documentação da API
+      const filters = [
+        { "field": "id_user", "operator": "=", "value": user.id },
+        { "field": "status", "operator": "=", "value": true }
+      ];
+      const order = [
+        { "field": "datetime", "ordination": "desc" }
+      ];
+
+      // 2. Converte os filtros para JSON e depois para Base64
+      const encodedFilters = encode(JSON.stringify(filters));
+      const encodedOrder = encode(JSON.stringify(order));
+      
+      // 3. Monta a URL final
+      const API_URL = `https://www.resolvevereador.com.br/api/occurrences/fetchbyfilter/${encodedFilters}/${encodedOrder}`;
+
+      const response = await fetch(API_URL, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Não foi possível carregar as ocorrências.');
+      }
+
+      const data = await response.json();
+      setOccurrences(data);
+
+    } catch (err: any) {
+      setError(err.message);
+      console.error("Erro ao buscar ocorrências:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // useFocusEffect é chamado toda vez que a tela entra em foco,
+  // garantindo que a lista seja atualizada (ex: após adicionar uma nova ocorrência).
+  useFocusEffect(
+    useCallback(() => {
+      fetchOccurrences();
+    }, [user, token]) // As dependências garantem que a busca só seja refeita se o usuário mudar
+  );
+
+  const renderContent = () => {
+    if (isLoading && occurrences.length === 0) {
+      return <ActivityIndicator size="large" color="#007bff" style={{ marginTop: 50 }} />;
+    }
+    if (error) {
+      return <Text style={styles.infoText}>Erro ao carregar ocorrências: {error}</Text>;
+    }
+    if (!isLoading && occurrences.length === 0) {
+      return <Text style={styles.infoText}>Nenhuma ocorrência encontrada.</Text>;
+    }
+    return (
+      <FlatList
+        data={occurrences}
+        keyExtractor={(item) => String(item.id)}
+        renderItem={({ item }) => <OccurrenceItem item={item} />}
+        contentContainerStyle={styles.flatListContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={isLoading} onRefresh={fetchOccurrences} />
+        }
+      />
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Ocorrências Recentes</Text>
-          <TouchableOpacity>
-            <Feather name="settings" size={24} color="#333" />
+          <Text style={styles.headerTitle}>Minhas Ocorrências</Text>
+          <TouchableOpacity onPress={fetchOccurrences}>
+            <Feather name="refresh-cw" size={24} color="#333" />
           </TouchableOpacity>
         </View>
-
-        <FlatList
-          data={DUMMY_OCCURRENCES}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <OccurrenceItem item={item} />}
-          contentContainerStyle={styles.flatListContent}
-          showsVerticalScrollIndicator={false}
-        />
+        {renderContent()}
       </View>
     </SafeAreaView>
   );
@@ -134,7 +213,7 @@ const styles = StyleSheet.create({
   },
   flatListContent: {
     paddingHorizontal: 15,
-    paddingBottom: 100, // Espaço para o menu inferior
+    paddingBottom: 100,
   },
   occurrenceCard: {
     backgroundColor: '#fff',
@@ -150,15 +229,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 15,
-  },
-  iconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-    backgroundColor: '#00BCD4',
   },
   headerTextContainer: {
     flex: 1,
@@ -202,12 +272,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    width: "100%"
+    alignSelf: 'stretch',
   },
   detailsButtonText: {
     color: 'white',
     fontSize: 14,
     fontWeight: 'bold',
   },
+  infoText: {
+      textAlign: 'center',
+      marginTop: 50,
+      fontSize: 16,
+      color: '#666'
+  }
 });
+

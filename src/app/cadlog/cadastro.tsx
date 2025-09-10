@@ -218,7 +218,8 @@ const Step2 = ({
         autoCapitalize="words"
         placeholderTextColor="#a0a0a0"
       />
-
+      {/* ATENÇÃO: Os campos de Estado e Cidade abaixo ainda usam a API do IBGE. */}
+      {/* Eles precisarão ser substituídos quando o dono da API fornecer os novos endpoints para buscar estados e cidades. */}
       <Text style={styles.label}>Estado:</Text>
       <View style={styles.pickerContainer}>
         {loadingStates ? (
@@ -360,6 +361,9 @@ export default function Cadastro() {
     'fontai': require('../../../assets/fonts/SpaceGrotesk-Regular.ttf'),
   });
 
+  // --- ATENÇÃO: As duas funções 'useEffect' abaixo buscam dados da API do IBGE.
+  // Elas precisarão ser substituídas por chamadas aos novos endpoints da API do seu cliente
+  // assim que eles forem disponibilizados, pois os IDs de estado e cidade são diferentes.
   useEffect(() => {
     async function fetchStates() {
       setLoadingStates(true);
@@ -475,18 +479,11 @@ export default function Cadastro() {
 
     setIsRegistering(true);
 
-    const formatDate = (date) => {
-      if (!date) return '';
-      const day = String(date.getDate()).padStart(2, '0');
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const year = date.getFullYear();
-      return `${day}/${month}/${year}`;
-    };
-
     const userData = {
       name: fullName,
       cpf: cpf.replace(/\D/g, ''),
-      date_birth: formatDate(dateOfBirth),
+      // --- MUDANÇA 1: Formato da data alterado para AAAA-MM-DD ---
+      date_birth: dateOfBirth ? dateOfBirth.toLocaleDateString('en-CA') : '',
       email: email,
       cell_phone: cellPhone,
       password: password,
@@ -502,10 +499,11 @@ export default function Cadastro() {
       id_city: id_city,
     };
     
-    console.log('Enviando dados do usuário (com CPF corrigido):', JSON.stringify(userData, null, 2));
+    console.log('Enviando dados do usuário (formato de data e URL atualizados):', JSON.stringify(userData, null, 2));
 
     try {
-      const API_URL = 'https://resolvevereador.com.br/api/users/store';
+      // --- MUDANÇA 2: URL do endpoint de cadastro atualizada ---
+      const API_URL = 'https://www.resolvevereador.com.br/api/users-app/store';
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: {
@@ -526,7 +524,13 @@ export default function Cadastro() {
         Alert.alert('Sucesso', data.message || 'Usuário cadastrado com sucesso!');
         router.replace('/login');
       } else {
-        Alert.alert('Erro no Cadastro', data.message || 'Ocorreu um erro no cadastro. Verifique os dados.');
+        // Se a API retornar um erro de validação, mostra a mensagem específica
+        if (data.errors) {
+            const errorMessages = Object.values(data.errors).flat().join('\n');
+            Alert.alert('Erro no Cadastro', errorMessages);
+        } else {
+            Alert.alert('Erro no Cadastro', data.message || 'Ocorreu um erro no cadastro. Verifique os dados.');
+        }
         console.error('Erro da API:', data);
       }
     } catch (error) {
@@ -810,3 +814,4 @@ const styles = StyleSheet.create({
     color: '#333',
   },
 });
+

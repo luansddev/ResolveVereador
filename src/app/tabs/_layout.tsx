@@ -89,19 +89,20 @@ export default function TabsLayout() {
           tabBarStyle: { display: 'none' },
         }}
       />
-
+      
       <Tabs.Screen
         name="actions/detalhesOcorrencia"
         options={{
-          href: null
+          href: null,
+          tabBarStyle: { display: 'none' },
         }}
       />
       
       <Tabs.Screen
         name="actions/ocorrenciasUser"
         options={{
-          href: null, // Esta linha oculta a aba do menu inferior
-          tabBarStyle: { display: 'none' }, // E esta linha oculta a barra de navegação nesta tela
+          href: null,
+          tabBarStyle: { display: 'none' },
         }}
       />
     </Tabs>

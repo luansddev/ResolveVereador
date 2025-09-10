@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -9,10 +9,39 @@ import {
   TextInput, 
   Platform, 
   StatusBar,
-  Alert 
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import { useAuth } from '../../../context/AuthContext'; // Ajuste o caminho se sua pasta for 'context'
+
+// --- FUNÇÕES DE FORMATAÇÃO ---
+const formatCpf = (cpf) => {
+  if (!cpf) return '';
+  const cleaned = cpf.replace(/\D/g, '');
+  return cleaned
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+};
+
+const formatPhoneNumber = (phoneNumber) => {
+  if (!phoneNumber) return '';
+  const cleaned = phoneNumber.replace(/\D/g, '');
+  const match = cleaned.match(/^(\d{2})(\d{5})(\d{4})$/);
+  if (match) {
+    return `(${match[1]}) ${match[2]}-${match[3]}`;
+  }
+  return phoneNumber;
+};
+
+const formatCep = (cep) => {
+    if (!cep) return '';
+    const cleaned = cep.replace(/\D/g, '');
+    return cleaned.replace(/(\d{5})(\d)/, '$1-$2');
+};
+
 
 // Componente reutilizável para os campos de input
 const FormInput = ({ label, value, onChangeText, ...props }) => (
@@ -30,36 +59,107 @@ const FormInput = ({ label, value, onChangeText, ...props }) => (
 
 export default function EditarPerfil() {
   const router = useRouter();
+  // Pega o usuário e o token do nosso gerenciador de sessão
+  const { user, token } = useAuth(); 
   
-  // Estados para os campos do formulário (preenchidos com dados mock)
-  const [name, setName] = useState('Luan Silva');
-  const [cpf, setCpf] = useState('546.515.178-11');
-  const [email, setEmail] = useState('luandominguesdev@gmail.com');
-  const [cellPhone, setCellPhone] = useState('(13) 95538-1350');
-  const [zipCode, setZipCode] = useState('11730-000');
-  const [address, setAddress] = useState('Rua ABC');
-  const [number, setNumber] = useState('123');
+  // Estados para os campos do formulário
+  const [name, setName] = useState('');
+  const [cpf, setCpf] = useState('');
+  const [email, setEmail] = useState('');
+  const [cellPhone, setCellPhone] = useState('');
+  const [zipCode, setZipCode] = useState('');
+  const [address, setAddress] = useState('');
+  const [number, setNumber] = useState('');
   const [complement, setComplement] = useState('');
-  const [neighborhood, setNeighborhood] = useState('Bairro EFG');
+  const [neighborhood, setNeighborhood] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSaveChanges = () => {
-    // Aqui virá a lógica para enviar os dados para a API
-    console.log({
-      name,
-      cpf,
-      email,
-      cellPhone,
-      zipCode,
-      address,
-      number,
-      complement,
-      neighborhood,
-      password,
-    });
-    Alert.alert('Salvo!', 'Suas alterações foram salvas com sucesso.');
-    router.back();
+  // Preenche o formulário com os dados do usuário do contexto quando a tela abre
+  useEffect(() => {
+    if (user) {
+      setName(user.name || '');
+      setCpf(formatCpf(user.cpf || ''));
+      setEmail(user.email || '');
+      setCellPhone(formatPhoneNumber(user.cell_phone || ''));
+      if (user.address) {
+        setZipCode(formatCep(user.address.zipcode || ''));
+        setAddress(user.address.address || '');
+        setNumber(String(user.address.number) || '');
+        setComplement(user.address.complement || '');
+        setNeighborhood(user.address.neighborhood || '');
+      }
+    }
+  }, [user]);
+
+  // Função para enviar os dados atualizados para a API
+  const handleSaveChanges = async () => {
+    if (!user || !token) {
+        Alert.alert("Erro de Autenticação", "Sessão inválida. Por favor, faça login novamente.");
+        return;
+    }
+    
+    // Validação de senha
+    if (password && password !== confirmPassword) {
+      Alert.alert('Erro', 'As senhas não coincidem.');
+      return;
+    }
+    if (password && password.length < 6) {
+        Alert.alert('Erro', 'A nova senha deve ter no mínimo 6 caracteres.');
+        return;
+    }
+
+    setIsSaving(true);
+    
+    // Monta o objeto JSON para a API, conforme a documentação
+    const updatedData = {
+        name,
+        cpf: cpf.replace(/\D/g, ''),
+        email,
+        cell_phone: cellPhone,
+        zipcode: zipCode,
+        address,
+        number,
+        complement,
+        neighborhood,
+        // Inclui a senha apenas se o usuário a preencheu
+        ...(password && { password: password }),
+        // A API exige que todos os campos sejam enviados, mesmo os que não mudaram
+        id_state: user.address?.state?.id, 
+        id_city: user.address?.city?.id,
+        id_gender: user.gender?.id,
+        status: true,
+        is_parliament: false,
+    };
+
+    try {
+        const response = await fetch(`https://www.resolvevereador.com.br/api/users/update/${user.id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify(updatedData),
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.code === 200) {
+            Alert.alert('Sucesso!', 'Seu perfil foi atualizado.');
+            // Em um app completo, você também precisaria atualizar o 'user' no AuthContext
+            router.back();
+        } else {
+            throw new Error(data.message || 'Não foi possível salvar as alterações.');
+        }
+    } catch (error: any) {
+        console.error("Erro ao salvar perfil:", error);
+        Alert.alert("Erro", error.message);
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   return (
@@ -81,9 +181,10 @@ export default function EditarPerfil() {
         <FormInput 
           label="CPF"
           value={cpf}
-          onChangeText={setCpf}
+          onChangeText={(text) => setCpf(formatCpf(text))}
           keyboardType="numeric"
-          // O CPF não deve ser editável em um cenário real, mas a API permite
+          maxLength={14}
+          editable={false} // CPF não deve ser editável
         />
         <FormInput 
           label="E-mail"
@@ -95,14 +196,16 @@ export default function EditarPerfil() {
         <FormInput 
           label="Celular"
           value={cellPhone}
-          onChangeText={setCellPhone}
+          onChangeText={(text) => setCellPhone(formatPhoneNumber(text))}
           keyboardType="phone-pad"
+          maxLength={15}
         />
         <FormInput 
           label="CEP"
           value={zipCode}
-          onChangeText={setZipCode}
+          onChangeText={(text) => setZipCode(formatCep(text))}
           keyboardType="numeric"
+          maxLength={9}
         />
         <FormInput 
           label="Endereço"
@@ -141,8 +244,12 @@ export default function EditarPerfil() {
           secureTextEntry
         />
         
-        <TouchableOpacity style={styles.saveButton} onPress={handleSaveChanges}>
-          <Text style={styles.saveButtonText}>Salvar Alterações</Text>
+        <TouchableOpacity style={[styles.saveButton, isSaving && styles.saveButtonDisabled]} onPress={handleSaveChanges} disabled={isSaving}>
+          {isSaving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.saveButtonText}>Salvar Alterações</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -174,7 +281,9 @@ const styles = StyleSheet.create({
     padding: 5,
   },
   container: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
   },
   inputContainer: {
     marginBottom: 15,
@@ -210,6 +319,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 30,
+  },
+  saveButtonDisabled: {
+    backgroundColor: '#a0c7e4',
   },
   saveButtonText: {
     color: '#fff',
