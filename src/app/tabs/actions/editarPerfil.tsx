@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { useState, useEffect } from 'react'; // CORREÇÃO: Hooks importados separadamente.
 import { 
   View, 
   Text, 
@@ -10,14 +11,38 @@ import {
   Platform, 
   StatusBar,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  TextInputProps
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import { useAuth } from '../../../context/AuthContext'; // Ajuste o caminho se sua pasta for 'context'
+import { useAuth } from '../../../context/AuthContext';
+
+// Interface para o usuário, baseada na documentação da API
+interface User {
+  id: number;
+  name: string;
+  cpf: string;
+  email: string;
+  cell_phone: string;
+  date_birth: string;
+  address: {
+    zipcode: string;
+    address: string;
+    number: number;
+    complement: string;
+    neighborhood: string;
+    state: { id: number };
+    city: { id: number };
+  } | null;
+  gender: {
+    id: number;
+    title: string;
+  } | null;
+}
 
 // --- FUNÇÕES DE FORMATAÇÃO ---
-const formatCpf = (cpf) => {
+const formatCpf = (cpf: string): string => {
   if (!cpf) return '';
   const cleaned = cpf.replace(/\D/g, '');
   return cleaned
@@ -26,29 +51,32 @@ const formatCpf = (cpf) => {
     .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
 };
 
-const formatPhoneNumber = (phoneNumber) => {
+const formatPhoneNumber = (phoneNumber: string): string => {
   if (!phoneNumber) return '';
   const cleaned = phoneNumber.replace(/\D/g, '');
-  const match = cleaned.match(/^(\d{2})(\d{5})(\d{4})$/);
-  if (match) {
-    return `(${match[1]}) ${match[2]}-${match[3]}`;
-  }
-  return phoneNumber;
+  if (cleaned.length <= 2) return `(${cleaned}`;
+  if (cleaned.length <= 7) return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2)}`;
+  return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7, 11)}`;
 };
 
-const formatCep = (cep) => {
+const formatCep = (cep: string): string => {
     if (!cep) return '';
     const cleaned = cep.replace(/\D/g, '');
     return cleaned.replace(/(\d{5})(\d)/, '$1-$2');
 };
 
+// --- COMPONENTE DE INPUT ---
+type FormInputProps = TextInputProps & {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+};
 
-// Componente reutilizável para os campos de input
-const FormInput = ({ label, value, onChangeText, ...props }) => (
+const FormInput = ({ label, value, onChangeText, ...props }: FormInputProps) => (
   <View style={styles.inputContainer}>
     <Text style={styles.label}>{label}</Text>
     <TextInput
-      style={styles.input}
+      style={[styles.input, !props.editable && styles.inputDisabled]}
       value={value}
       onChangeText={onChangeText}
       placeholderTextColor="#a0a0a0"
@@ -57,12 +85,12 @@ const FormInput = ({ label, value, onChangeText, ...props }) => (
   </View>
 );
 
+// --- TELA PRINCIPAL ---
 export default function EditarPerfil() {
   const router = useRouter();
-  // Pega o usuário e o token do nosso gerenciador de sessão
-  const { user, token } = useAuth(); 
+  const { user, token } = useAuth() as { user: User | null; token: string | null }; 
   
-  // Estados para os campos do formulário
+  // Estados do formulário
   const [name, setName] = useState('');
   const [cpf, setCpf] = useState('');
   const [email, setEmail] = useState('');
@@ -74,10 +102,9 @@ export default function EditarPerfil() {
   const [neighborhood, setNeighborhood] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
   const [isSaving, setIsSaving] = useState(false);
 
-  // Preenche o formulário com os dados do usuário do contexto quando a tela abre
+  // Preenche o formulário com dados do usuário
   useEffect(() => {
     if (user) {
       setName(user.name || '');
@@ -94,14 +121,20 @@ export default function EditarPerfil() {
     }
   }, [user]);
 
-  // Função para enviar os dados atualizados para a API
+  // Converte a data de DD/MM/AAAA para AAAA-MM-DD
+  const convertDateToApiFormat = (date: string): string => {
+    if (!date || !date.includes('/')) return date; 
+    const [day, month, year] = date.split('/');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Envia as alterações para a API
   const handleSaveChanges = async () => {
     if (!user || !token) {
         Alert.alert("Erro de Autenticação", "Sessão inválida. Por favor, faça login novamente.");
         return;
     }
     
-    // Validação de senha
     if (password && password !== confirmPassword) {
       Alert.alert('Erro', 'As senhas não coincidem.');
       return;
@@ -113,20 +146,18 @@ export default function EditarPerfil() {
 
     setIsSaving(true);
     
-    // Monta o objeto JSON para a API, conforme a documentação
     const updatedData = {
         name,
         cpf: cpf.replace(/\D/g, ''),
+        date_birth: convertDateToApiFormat(user.date_birth), 
         email,
-        cell_phone: cellPhone,
-        zipcode: zipCode,
+        cell_phone: cellPhone.replace(/\D/g, ''),
+        zipcode: zipCode.replace(/\D/g, ''),
         address,
         number,
         complement,
         neighborhood,
-        // Inclui a senha apenas se o usuário a preencheu
-        ...(password && { password: password }),
-        // A API exige que todos os campos sejam enviados, mesmo os que não mudaram
+        ...(password && { password }),
         id_state: user.address?.state?.id, 
         id_city: user.address?.city?.id,
         id_gender: user.gender?.id,
@@ -146,17 +177,17 @@ export default function EditarPerfil() {
         });
 
         const data = await response.json();
-
+        
         if (response.ok && data.code === 200) {
             Alert.alert('Sucesso!', 'Seu perfil foi atualizado.');
-            // Em um app completo, você também precisaria atualizar o 'user' no AuthContext
             router.back();
         } else {
-            throw new Error(data.message || 'Não foi possível salvar as alterações.');
+            const errorMessage = data.message || (data.data && typeof data.data === 'object' ? Object.values(data.data).flat().join('\n') : 'Não foi possível salvar as alterações.');
+            throw new Error(errorMessage);
         }
     } catch (error: any) {
         console.error("Erro ao salvar perfil:", error);
-        Alert.alert("Erro", error.message);
+        Alert.alert("Erro ao salvar", error.message);
     } finally {
         setIsSaving(false);
     }
@@ -172,7 +203,7 @@ export default function EditarPerfil() {
         <View style={{ width: 24 }} /> 
       </View>
 
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <FormInput 
           label="Nome Completo"
           value={name}
@@ -181,10 +212,10 @@ export default function EditarPerfil() {
         <FormInput 
           label="CPF"
           value={cpf}
-          onChangeText={(text) => setCpf(formatCpf(text))}
+          onChangeText={(text: string) => setCpf(formatCpf(text))}
           keyboardType="numeric"
           maxLength={14}
-          editable={false} // CPF não deve ser editável
+          editable={false}
         />
         <FormInput 
           label="E-mail"
@@ -196,14 +227,14 @@ export default function EditarPerfil() {
         <FormInput 
           label="Celular"
           value={cellPhone}
-          onChangeText={(text) => setCellPhone(formatPhoneNumber(text))}
+          onChangeText={(text: string) => setCellPhone(formatPhoneNumber(text))}
           keyboardType="phone-pad"
           maxLength={15}
         />
         <FormInput 
           label="CEP"
           value={zipCode}
-          onChangeText={(text) => setZipCode(formatCep(text))}
+          onChangeText={(text: string) => setZipCode(formatCep(text))}
           keyboardType="numeric"
           maxLength={9}
         />
@@ -259,7 +290,7 @@ export default function EditarPerfil() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f4f6f8',
+    backgroundColor: '#fff',
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   header: {
@@ -268,14 +299,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 15,
     paddingVertical: 10,
-    backgroundColor: '#fff',
+    backgroundColor: '#f4f4f4ff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
     color: '#333',
+    fontFamily: 'fontudo',
   },
   backButton: {
     padding: 5,
@@ -292,7 +323,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#555',
     marginBottom: 8,
-    fontWeight: '500',
+    fontFamily: 'fontuda',
   },
   input: {
     backgroundColor: '#fff',
@@ -302,16 +333,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#ddd',
+    fontFamily: 'fontai',
+  },
+  inputDisabled: {
+    backgroundColor: '#f0f0f0',
+    color: '#999',
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
     color: '#333',
     marginTop: 20,
     marginBottom: 10,
     borderTopWidth: 1,
     borderTopColor: '#eee',
     paddingTop: 20,
+    fontFamily: 'fontudo',
   },
   saveButton: {
     backgroundColor: '#007bff',
@@ -326,7 +362,6 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: '#fff',
     fontSize: 18,
-    fontWeight: 'bold',
+    fontFamily: 'fontudo',
   },
 });
-

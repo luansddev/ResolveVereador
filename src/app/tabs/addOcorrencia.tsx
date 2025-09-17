@@ -21,28 +21,28 @@ import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
 
-// --- Funções de formatação (sem alterações) ---
-const formatInputDate = (dateString) => {
+// --- Funções de formatação ---
+const formatInputDate = (dateString: string) => {
     const cleaned = dateString.replace(/\D/g, '');
     if (cleaned.length > 8) return cleaned.substring(0, 8).replace(/(\d{2})(\d{2})(\d{4})/, '$1/$2/$3');
     if (cleaned.length > 4) return cleaned.replace(/(\d{2})(\d{2})(\d{1,4})/, '$1/$2/$3');
     if (cleaned.length > 2) return cleaned.replace(/(\d{2})(\d{1,2})/, '$1/$2');
     return cleaned;
 };
-const isValidDate = (dateString) => {
+const isValidDate = (dateString: string) => {
     const regex = /^\d{2}\/\d{2}\/\d{4}$/;
     if (!regex.test(dateString)) return false;
     const [day, month, year] = dateString.split('/').map(Number);
     const date = new Date(year, month - 1, day);
     return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day && date <= new Date();
 };
-const formatInputTime = (timeString) => {
+const formatInputTime = (timeString: string) => {
     const cleaned = timeString.replace(/\D/g, '');
     if (cleaned.length > 4) return cleaned.substring(0, 4).replace(/(\d{2})(\d{2})/, '$1:$2');
     if (cleaned.length > 2) return cleaned.replace(/(\d{2})(\d{1,2})/, '$1:$2');
     return cleaned;
 };
-const isValidTime = (timeString) => {
+const isValidTime = (timeString: string) => {
     const regex = /^\d{2}:\d{2}$/;
     if (!regex.test(timeString)) return false;
     const [hours, minutes] = timeString.split(':').map(Number);
@@ -51,7 +51,7 @@ const isValidTime = (timeString) => {
 
 // --- COMPONENTES DAS ETAPAS ---
 
-const Step1 = ({ date, setDate, time, setTime, nextStep, isNextDisabled }) => (
+const Step1 = ({ date, setDate, time, setTime, nextStep, isNextDisabled }: any) => (
   <>
     <Text style={styles.sectionTitle}>Quando ocorreu?</Text>
     <Text style={styles.label}>Data:</Text>
@@ -75,8 +75,8 @@ const Step2 = ({
   mapRegion, markerCoordinate, setMarkerCoordinate,
   isMapLoading, mapRef, handleSearchAddress, isGeocoding,
   nextStep, prevStep, isNextDisabled
-}) => {
-  const handleMapPress = (e) => {
+}: any) => {
+  const handleMapPress = (e: any) => {
     const { latitude, longitude } = e.nativeEvent.coordinate;
     setMarkerCoordinate({ latitude, longitude });
   };
@@ -142,7 +142,7 @@ const Step3 = ({
   prevStep, handlePublish,
   isNextDisabled, isPublishing,
   images, pickImage,
-}) => (
+}: any) => (
   <>
     <Text style={styles.sectionTitle}>Descrição e Fotos</Text>
     <Text style={styles.label}>Faça a descrição da ocorrência:</Text>
@@ -156,9 +156,9 @@ const Step3 = ({
       textAlignVertical="top"
       placeholderTextColor="#a0a0a0"
     />
-    <Text style={styles.label}>Adicione até 4 fotos (opcional):</Text>
+    <Text style={styles.label}>Adicione até 4 fotos:</Text>
     <View style={styles.photoUploadContainer}>
-      {images.map((img, index) => (
+      {images.map((img: string | null, index: number) => (
         <TouchableOpacity
           key={index}
           style={styles.photoPlaceholder}
@@ -202,15 +202,15 @@ export default function AddOcorrencia() {
   const [time, setTime] = useState('');
   const [locationText, setLocationText] = useState('');
   const [description, setDescription] = useState('');
-  const [images, setImages] = useState([null, null, null, null]); 
+  const [images, setImages] = useState<(string | null)[]>([null, null, null, null]); 
 
-  const [mapRegion, setMapRegion] = useState(null);
-  const [markerCoordinate, setMarkerCoordinate] = useState(null);
+  const [mapRegion, setMapRegion] = useState<any>(null);
+  const [markerCoordinate, setMarkerCoordinate] = useState<any>(null);
   const [isMapLoading, setIsMapLoading] = useState(true);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
 
-  const mapRef = useRef(null);
+  const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
     const requestLocation = async () => {
@@ -242,7 +242,7 @@ export default function AddOcorrencia() {
     requestLocation();
   }, []);
 
-  const handleSearchAddress = async (address) => {
+  const handleSearchAddress = async (address: string) => {
     if (!address.trim()) {
       Alert.alert('Busca Inválida', 'Por favor, digite um endereço para pesquisar.');
       return;
@@ -271,7 +271,7 @@ export default function AddOcorrencia() {
     }
   };
 
-  const pickImage = async (index) => {
+  const pickImage = async (index: number) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permissão Negada', 'Precisamos de acesso à sua galeria para selecionar imagens.');
@@ -315,7 +315,7 @@ export default function AddOcorrencia() {
 
     setIsPublishing(true);
 
-    const formatDateTimeForAPI = (dateStr, timeStr) => {
+    const formatDateTimeForAPI = (dateStr: string, timeStr: string) => {
       const [day, month, year] = dateStr.split('/');
       return `${year}-${month}-${day} ${timeStr}:00`;
     };
@@ -331,11 +331,10 @@ export default function AddOcorrencia() {
     formData.append('id_situation', '1');
     formData.append('id_user', String(user.id));
 
-    // --- MUDANÇA APLICADA AQUI ---
     const selectedImages = images.filter(img => img !== null);
 
     if (selectedImages.length > 0) {
-        selectedImages.forEach((img) => {
+        selectedImages.forEach((img: any) => {
             const uriParts = img.split('.');
             const fileType = uriParts[uriParts.length - 1];
             const mimeType = `image/${fileType === 'jpg' ? 'jpeg' : fileType}`;
@@ -344,11 +343,8 @@ export default function AddOcorrencia() {
                 uri: img,
                 name: `occurrence_image.${fileType}`,
                 type: mimeType,
-            });
+            } as any);
         });
-    } else {
-        // Se nenhuma imagem for selecionada, envia o campo 'image[]' vazio para a API
-        formData.append('image[]', '');
     }
 
     try {
@@ -379,7 +375,7 @@ export default function AddOcorrencia() {
   };
 
   return (
-    <LinearGradient colors={['#4c669f', '#3b5998', '#192f6a']} style={styles.fullScreenGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+    <LinearGradient colors={['#eeeeeeff', '#eeeeeeff']} style={styles.fullScreenGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView style={styles.keyboardAvoidingView} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <ScrollView
@@ -388,10 +384,11 @@ export default function AddOcorrencia() {
           >
             <Link href="/tabs/home" asChild>
               <TouchableOpacity style={styles.backButton}>
-                <Text style={styles.backButtonText}>{'<'}</Text>
+                <Feather name="arrow-left" size={28} color="#4c669f" />
               </TouchableOpacity>
             </Link>
             <View style={styles.contentWrapper}>
+              
               <Text style={styles.title}>Adicione uma Ocorrência</Text>
               <View style={styles.progressContainer}>
                 <View style={[styles.progressStep, step >= 1 && styles.progressStepActive]} />
@@ -458,7 +455,6 @@ const styles = StyleSheet.create({
     zIndex: 1,
     padding: 10,
   },
-  backButtonText: { fontSize: 24, color: '#fff', fontWeight: 'bold' },
   contentWrapper: {
     padding: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -474,7 +470,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
+    fontFamily: 'fontudo',
     color: '#316996',
     marginBottom: 15,
     textAlign: 'center',
@@ -496,12 +492,18 @@ const styles = StyleSheet.create({
   progressStepActive: { backgroundColor: '#0090a9ff' },
   sectionTitle: {
     fontSize: 22,
-    fontWeight: '600',
+    fontFamily: 'fontudo',
     color: '#04588F',
     marginBottom: 12,
     textAlign: 'center',
   },
-  label: { fontSize: 16, color: '#333', marginBottom: 8, marginTop: 15, fontWeight: '500' },
+  label: { 
+    fontSize: 16, 
+    color: '#333', 
+    marginBottom: 8, 
+    marginTop: 15, 
+    fontFamily: 'fontuda',
+  },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -519,6 +521,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     backgroundColor: 'transparent',
+    fontFamily: 'fontai',
   },
   inputWithIcon: { paddingLeft: 45 },
   button: {
@@ -528,11 +531,16 @@ const styles = StyleSheet.create({
     marginTop: 20,
     elevation: 2,
   },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  buttonText: { 
+    color: '#fff', 
+    fontSize: 16, 
+    fontFamily: 'fontudo',
+  },
   buttonDisabled: { opacity: 0.6, backgroundColor: '#cccccc' },
   buttonGroup: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, gap: 10 },
-  buttonSecondary: { 
-    backgroundColor: 'transparent', 
+  buttonSecondary: {
+    // ✅ CORREÇÃO: Fundo alterado para branco para remover o efeito de "botão duplo"
+    backgroundColor: '#fff', 
     borderWidth: 2, 
     borderColor: '#007bff', 
     flex: 1 
@@ -541,7 +549,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#007bff', 
     flex: 1 
   },
-  buttonTextSecondary: { color: '#007bff', fontWeight: 'bold' },
+  buttonTextSecondary: { 
+    color: '#007bff', 
+    fontFamily: 'fontudo',
+  },
   searchContainer: { flexDirection: 'row', marginBottom: 10 },
   searchInput: {
     flex: 1,
@@ -553,6 +564,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     fontSize: 16,
     backgroundColor: '#f8f8f8',
+    fontFamily: 'fontai',
   },
   searchButton: {
     width: 60,
@@ -582,14 +594,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 8,
     backgroundColor: '#f8f8f8',
-    fontSize: 16
+    fontSize: 16,
+    fontFamily: 'fontai',
   },
   photoUploadContainer: { 
     flexDirection: 'row', 
     justifyContent: 'space-around', 
     flexWrap: 'wrap',
-    marginTop: 10, 
-    marginBottom: 20 
+    marginTop: 10
   },
   photoPlaceholder: {
     width: '48%',
@@ -604,7 +616,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: '4%',
   },
-  photoPlaceholderText: { color: '#888', fontSize: 40 },
+  photoPlaceholderText: { 
+    color: '#888', 
+    fontSize: 40,
+    fontFamily: 'fontuda',
+  },
   photoPreview: { width: '100%', height: '100%' },
 });
-

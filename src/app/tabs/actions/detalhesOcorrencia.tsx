@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,36 +8,178 @@ import {
   ScrollView,
   Image,
   TouchableOpacity,
+  ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
+import { useAuth } from '../../../context/AuthContext';
 
-// Dados de exemplo baseados na documentação e no ID recebido
-// Em um app real, você usaria o 'id' para fazer um fetch na API
-const getDummyDetails = (id) => ({
-  id: id,
-  title: 'Alagamento na Rua XV',
-  timeAgo: 'Há 1 dia',
-  severity: 'Moderado',
-  iconName: 'cloud-rain',
-  description: 'It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.',
-  location: {
-    address: 'Avenida ABC',
-    latitude: -24.0054, // Coordenadas de exemplo
-    longitude: -46.4022,
-  },
-  images: [
-    { id: '1', url: 'https://placehold.co/400x400/e2e8f0/4a5568?text=Foto+1' },
-    { id: '2', url: 'https://placehold.co/400x400/e2e8f0/4a5568?text=Foto+2' },
-  ]
-});
-
+interface Occurrence {
+  id: number;
+  description: string;
+  datetime: string;
+  latitude: string;
+  longitude: string;
+  situation: {
+    situation_title: string | null;
+  } | null;
+  image: any; // pode ser array ou objeto
+}
 
 export default function DetalhesOcorrencia() {
   const router = useRouter();
-  const { id } = useLocalSearchParams(); // Pega o ID passado como parâmetro
-  const occurrence = getDummyDetails(id); // Busca os dados (mock) com base no ID
+  const { id } = useLocalSearchParams();
+  const { token } = useAuth();
+
+  const [occurrence, setOccurrence] = useState<Occurrence | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [failedImages, setFailedImages] = useState<{ [key: string]: boolean }>({});
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [address, setAddress] = useState<string | null>(null);
+
+  // Função para extrair data e hora separadamente
+  const getOccurrenceTimeInfo = (datetime: string | undefined): { date: string; time: string } => {
+    if (!datetime) return { date: 'Data indisponível', time: 'hora indisponível' };
+    try {
+      const parts = datetime.split(' ');
+      const datePart = parts[0];
+      const timePart = parts[1].substring(0, 5);
+      return { date: datePart, time: timePart };
+    } catch (e) {
+      return { date: 'Data inválida', time: 'hora inválida' };
+    }
+  };
+
+  useEffect(() => {
+    const fetchOccurrenceDetails = async () => {
+      if (!id || !token) {
+        setError('ID da ocorrência ou token de autenticação não encontrado.');
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const API_URL = `https://www.resolvevereador.com.br/api/occurrences/show/${id}`;
+
+        const response = await fetch(API_URL, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Falha ao buscar os detalhes da ocorrência.');
+        }
+
+        const data = await response.json();
+        setOccurrence(data);
+      } catch (err: any) {
+        setError(err.message);
+        console.error('Erro ao buscar detalhes:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchOccurrenceDetails();
+  }, [id, token]);
+
+  // Buscar endereço (geocodificação reversa)
+  useEffect(() => {
+    if (occurrence) {
+      const lat = parseFloat(occurrence.latitude);
+      const lon = parseFloat(occurrence.longitude);
+
+      if (!isNaN(lat) && !isNaN(lon)) {
+        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`, {
+          headers: {
+            'User-Agent': 'SeuApp/1.0 (contato@exemplo.com)',
+            'Accept': 'application/json',
+          },
+        })
+          .then((res) => res.json())
+          .then((json) => {
+            if (json?.address) {
+              const { road, suburb, neighbourhood, city, town, village, postcode } = json.address;
+
+              const street = road || '';
+              const district = suburb || neighbourhood || '';
+              const locality = city || town || village || '';
+              const cep = postcode || '';
+
+              const formatted = [street, district, locality, cep].filter(Boolean).join(', ');
+
+              setAddress(formatted || 'Endereço não encontrado');
+            } else {
+              setAddress('Endereço não encontrado');
+            }
+          })
+          .catch(() => setAddress('Erro ao buscar endereço'));
+      }
+    }
+  }, [occurrence]);
+
+  // Lógica para imagens
+  const imageList: { id: number; url: string }[] = [];
+  if (occurrence?.image && Array.isArray(occurrence.image)) {
+    occurrence.image.forEach((group: any) => {
+      if (Array.isArray(group)) {
+        const best = group.find((img: any) => img.url.includes('-100.jpg')) || group[0];
+        if (best) imageList.push(best);
+      } else if (group.url) {
+        imageList.push(group);
+      }
+    });
+  }
+
+  const { date, time } = getOccurrenceTimeInfo(occurrence?.datetime);
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Feather name="arrow-left" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Detalhes da Ocorrência</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#007bff" />
+          <Text style={{ marginTop: 10, color: '#666', fontFamily: 'fontuda' }}>Carregando...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !occurrence) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Feather name="arrow-left" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Detalhes da Ocorrência</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <View style={styles.centered}>
+          <Feather name="alert-triangle" size={40} color="#d9534f" />
+          <Text style={styles.errorText}>
+            {error || 'Não foi possível carregar os dados da ocorrência.'}
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const lat = parseFloat(occurrence.latitude);
+  const lon = parseFloat(occurrence.longitude);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -53,53 +195,105 @@ export default function DetalhesOcorrencia() {
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={styles.iconCircle}>
-              <Feather name={occurrence.iconName} size={24} color="white" />
+              <Feather name="alert-triangle" size={24} color="white" />
             </View>
             <View style={styles.headerTextContainer}>
-              <Text style={styles.occurrenceTitle}>{occurrence.title}</Text>
-              <View style={styles.detailsRow}>
-                <Feather name="clock" size={14} color="#666" />
-                <Text style={styles.detailText}>{occurrence.timeAgo}</Text>
-                <Text style={styles.detailSeparator}>|</Text>
-                <Feather name="alert-circle" size={14} color="#666" />
-                <Text style={styles.detailText}>{occurrence.severity}</Text>
-              </View>
+              <Text style={styles.occurrenceTitle}>
+                Ocorrência de {date} às {time}
+              </Text>
+              {occurrence.situation?.situation_title && (
+                <View style={styles.detailsRow}>
+                  <Feather name="alert-circle" size={14} color="#666" />
+                  <Text style={styles.detailText}>
+                    {occurrence.situation.situation_title}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
           <View style={styles.cardBody}>
             <Text style={styles.descriptionText}>{occurrence.description}</Text>
-            
-            <View style={styles.imageGallery}>
-              {occurrence.images.map(image => (
-                <Image key={image.id} source={{ uri: image.url }} style={styles.galleryImage} />
-              ))}
-            </View>
+
+            {imageList.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.imageGallery}
+              >
+                {imageList.map((img, index) => {
+                  const key = `${index}-${img.id}`;
+                  const failed = failedImages[key];
+
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      style={styles.imageWrapper}
+                      onPress={() => !failed && setSelectedImage(img.url)}
+                    >
+                      {!failed ? (
+                        <Image
+                          source={{ uri: img.url }}
+                          style={styles.galleryImage}
+                          resizeMode="cover"
+                          onError={() => {
+                            setFailedImages((prev) => ({ ...prev, [key]: true }));
+                          }}
+                        />
+                      ) : (
+                        <View style={[styles.galleryImage, styles.errorImage]}>
+                          <Feather name="camera-off" size={30} color="#999" />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            ) : (
+              <Text style={styles.infoText}>
+                Nenhuma imagem encontrada para esta ocorrência.
+              </Text>
+            )}
+
+            <Modal visible={!!selectedImage} transparent={true} onRequestClose={() => setSelectedImage(null)}>
+              <View style={styles.modalBackground}>
+                <TouchableOpacity
+                  style={styles.modalCloseButton}
+                  onPress={() => setSelectedImage(null)}
+                >
+                  <Feather name="x" size={30} color="white" />
+                </TouchableOpacity>
+                {selectedImage && (
+                  <Image
+                    source={{ uri: selectedImage }}
+                    style={styles.fullscreenImage}
+                    resizeMode="contain"
+                  />
+                )}
+              </View>
+            </Modal>
 
             <View style={styles.locationSection}>
-                <Feather name="map-pin" size={16} color="#333" style={{ marginRight: 8 }}/>
-                <Text style={styles.locationAddress}>{occurrence.location.address}</Text>
+              <Feather name="map-pin" size={16} color="#333" style={{ marginRight: 8 }} />
+              <Text style={styles.locationAddress}>
+                {address || 'Carregando endereço...'}
+              </Text>
             </View>
 
-            <View style={styles.mapContainer}>
-              <MapView
-                style={styles.map}
-                initialRegion={{
-                  latitude: occurrence.location.latitude,
-                  longitude: occurrence.location.longitude,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.01,
-                }}
-                scrollEnabled={false} // Trava o mapa
-                zoomEnabled={false}   // Trava o zoom
-              >
-                <Marker
-                  coordinate={{
-                    latitude: occurrence.location.latitude,
-                    longitude: occurrence.location.longitude,
+            {!isNaN(lat) && !isNaN(lon) && (
+              <View style={styles.mapContainer}>
+                <MapView
+                  style={styles.map}
+                  region={{
+                    latitude: lat,
+                    longitude: lon,
+                    latitudeDelta: 0.01,
+                    longitudeDelta: 0.01,
                   }}
-                />
-              </MapView>
-            </View>
+                >
+                  <Marker coordinate={{ latitude: lat, longitude: lon }} />
+                </MapView>
+              </View>
+            )}
           </View>
         </View>
       </ScrollView>
@@ -125,8 +319,8 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
     color: '#333',
+    fontFamily: 'fontudo',
   },
   backButton: {
     padding: 5,
@@ -164,24 +358,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   occurrenceTitle: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 16,
     color: '#333',
     marginBottom: 5,
+    fontFamily: 'fontudo',
   },
   detailsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 4,
   },
   detailText: {
     fontSize: 13,
     color: '#666',
     marginLeft: 5,
-  },
-  detailSeparator: {
-    fontSize: 13,
-    color: '#ccc',
-    marginHorizontal: 8,
+    fontFamily: 'fontuda',
   },
   cardBody: {
     padding: 15,
@@ -191,18 +382,46 @@ const styles = StyleSheet.create({
     color: '#555',
     lineHeight: 22,
     marginBottom: 20,
+    fontFamily: 'fontai',
   },
   imageGallery: {
     flexDirection: 'row',
-    justifyContent: 'flex-start',
-    gap: 15,
     marginBottom: 20,
   },
+  imageWrapper: {
+    width: 150,
+    height: 150,
+    borderRadius: 12,
+    marginRight: 12,
+    overflow: 'hidden',
+    backgroundColor: '#e0e0e0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   galleryImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 8,
-    backgroundColor: '#e0e0e0'
+    width: '100%',
+    height: '100%',
+  },
+  errorImage: {
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalBackground: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: 40,
+    right: 20,
+    zIndex: 10,
+  },
+  fullscreenImage: {
+    width: '100%',
+    height: '100%',
   },
   locationSection: {
     flexDirection: 'row',
@@ -211,8 +430,9 @@ const styles = StyleSheet.create({
   },
   locationAddress: {
     fontSize: 16,
-    fontWeight: '600',
     color: '#333',
+    flex: 1,
+    fontFamily: 'fontudo',
   },
   mapContainer: {
     width: '100%',
@@ -221,9 +441,30 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#e9e9e9',
     borderWidth: 1,
-    borderColor: '#ddd'
+    borderColor: '#ddd',
   },
   map: {
     ...StyleSheet.absoluteFillObject,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    marginTop: 15,
+    fontSize: 16,
+    color: '#d9534f',
+    textAlign: 'center',
+    fontFamily: 'fontuda',
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: 20,
+    fontFamily: 'fontuda',
   },
 });

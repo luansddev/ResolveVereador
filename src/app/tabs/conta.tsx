@@ -1,4 +1,4 @@
-import React from 'react'; // useEffect e useState não são mais necessários aqui
+import React from 'react';
 import {
   View,
   Text,
@@ -12,10 +12,10 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import { useAuth } from '../../context/AuthContext'; // 1. Importa o hook de autenticação
+import { useAuth } from '../../context/AuthContext';
 
 // Função para formatar o CPF para exibição
-const formatCpfForDisplay = (cpf) => {
+const formatCpfForDisplay = (cpf: string) => {
   if (!cpf) return '';
   return cpf
     .replace(/\D/g, '')
@@ -25,7 +25,7 @@ const formatCpfForDisplay = (cpf) => {
 };
 
 // Componente para reutilizar as linhas de informação
-const InfoRow = ({ icon, label, value }) => (
+const InfoRow = ({ icon, label, value }: { icon: any; label: string; value: string }) => (
   <View style={styles.infoRow}>
     <Feather name={icon} size={20} color="#555" style={styles.infoIcon} />
     <View>
@@ -36,7 +36,7 @@ const InfoRow = ({ icon, label, value }) => (
 );
 
 // Botão de ação
-const ActionButton = ({ icon, label, onPress, color = '#333' }) => (
+const ActionButton = ({ icon, label, onPress, color = '#333' }: { icon: any; label: string; onPress: () => void; color?: string }) => (
   <TouchableOpacity style={styles.actionButton} onPress={onPress}>
     <Feather name={icon} size={22} color={color} />
     <Text style={[styles.actionButtonText, { color }]}>{label}</Text>
@@ -46,25 +46,21 @@ const ActionButton = ({ icon, label, onPress, color = '#333' }) => (
 
 export default function Conta() {
   const router = useRouter();
-  // 2. Pega os dados e funções diretamente do AuthContext
   const { user, signOut, isLoading } = useAuth();
 
-  // A função de logout agora é muito mais simples, apenas chama o signOut do contexto
   const handleLogout = () => {
     signOut();
   };
 
-  // 3. Usa o estado de carregamento do AuthContext
   if (isLoading) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#007bff" />
-        <Text>Carregando...</Text>
+        <Text style={styles.loadingText}>Carregando...</Text>
       </View>
     );
   }
   
-  // Se, após o carregamento, não houver usuário, mostra uma mensagem
   if (!user) {
     return (
         <View style={styles.centerContainer}>
@@ -81,7 +77,6 @@ export default function Conta() {
         <View style={{ width: 24 }} />
       </View>
 
-      {/* 4. Renderiza os dados do usuário diretamente do objeto 'user' do contexto */}
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.profileName}>{user.name}</Text>
 
@@ -116,11 +111,7 @@ export default function Conta() {
             label="Editar Perfil"
             onPress={() => router.push('/tabs/actions/editarPerfil')}
           />
-          <ActionButton
-            icon="list"
-            label="Minhas Ocorrências"
-            onPress={() => router.push('/tabs/actions/ocorrenciasUser')}
-          />
+          {/* O BOTÃO 'MINHAS OCORRÊNCIAS' FOI REMOVIDO DAQUI */}
           <ActionButton
             icon="log-out"
             label="Sair"
@@ -136,7 +127,7 @@ export default function Conta() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f4f6f8',
+    backgroundColor: '#fff',
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   centerContainer: {
@@ -145,11 +136,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    fontFamily: 'fontuda', // <-- ADICIONADO
+    color: '#666',
+  },
   errorText: {
     marginTop: 10,
     fontSize: 16,
     color: '#333',
     textAlign: 'center',
+    fontFamily: 'fontuda', // <-- ADICIONADO
   },
   header: {
     flexDirection: 'row',
@@ -157,13 +155,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 15,
     paddingVertical: 10,
-    backgroundColor: '#fff',
+    backgroundColor: '#f4f4f4ff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    // fontWeight: 'bold', // Removido
+    fontFamily: 'fontudo', // <-- ADICIONADO
     color: '#333',
   },
   container: {
@@ -173,7 +172,8 @@ const styles = StyleSheet.create({
   },
   profileName: {
     fontSize: 28,
-    fontWeight: '700',
+    // fontWeight: '700', // Removido
+    fontFamily: 'fontudo', // <-- ADICIONADO
     color: '#333',
     textAlign: 'center',
     marginBottom: 30,
@@ -191,7 +191,8 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    // fontWeight: 'bold', // Removido
+    fontFamily: 'fontudo', // <-- ADICIONADO
     color: '#333',
     marginBottom: 15,
     paddingBottom: 10,
@@ -211,11 +212,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#888',
     marginBottom: 2,
+    fontFamily: 'fontuda', // <-- ADICIONADO
   },
   infoValue: {
     fontSize: 16,
     color: '#333',
-    fontWeight: '500',
+    // fontWeight: '500', // Removido
+    fontFamily: 'fontai', // <-- ADICIONADO
   },
   actionButton: {
     flexDirection: 'row',
@@ -228,6 +231,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     marginLeft: 15,
+    fontFamily: 'fontuda', // <-- ADICIONADO
   },
 });
-

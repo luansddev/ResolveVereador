@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,14 +9,16 @@ import {
   FlatList,
   ActivityIndicator,
   RefreshControl,
+  Animated,
+  Easing,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
-import { encode } from 'base-64'; // Importa a função para codificar em Base64
+import { encode } from 'base-64';
 
 // Componente individual para cada item da ocorrência
-const OccurrenceItem = ({ item }) => {
+const OccurrenceItem = ({ item }: { item: any }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const router = useRouter();
 
@@ -27,14 +29,12 @@ const OccurrenceItem = ({ item }) => {
     });
   };
 
-  // Função para formatar a data que vem da API (DD/MM/YYYY HH:mm:ss)
-  // para um formato legível (DD/MM/YYYY às HH:mm)
-  const formatApiDateTime = (datetime) => {
+  const formatApiDateTime = (datetime: string) => {
     if (!datetime) return 'Data indisponível';
     try {
       const parts = datetime.split(' ');
       const datePart = parts[0];
-      const timePart = parts[1].substring(0, 5); // Pega apenas HH:mm
+      const timePart = parts[1].substring(0, 5);
       return `${datePart} às ${timePart}`;
     } catch (e) {
       return 'Data inválida';
@@ -47,14 +47,12 @@ const OccurrenceItem = ({ item }) => {
     <View style={styles.occurrenceCard}>
       <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)} style={styles.cardHeader}>
         <View style={styles.headerTextContainer}>
-          {/* A API não retorna um 'title', então usamos a descrição como título */}
           <Text style={styles.occurrenceTitle} numberOfLines={1}>
             {item.description || 'Ocorrência sem descrição'}
           </Text>
           <View style={styles.detailsRow}>
             <Feather name="clock" size={14} color="#666" />
             <Text style={styles.detailText}>{formattedDate}</Text>
-            {/* O campo 'severity' foi mapeado para 'situation_title' da API */}
             {item.situation?.situation_title && (
               <>
                 <Text style={styles.detailSeparator}>|</Text>
@@ -87,9 +85,35 @@ const OccurrenceItem = ({ item }) => {
 
 export default function Home() {
   const { user, token } = useAuth();
-  const [occurrences, setOccurrences] = useState([]);
+  const [occurrences, setOccurrences] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const spinValue = useRef(new Animated.Value(0)).current;
+  
+  const spinAnimation = Animated.loop(
+    Animated.timing(spinValue, {
+      toValue: 1,
+      duration: 1000,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    })
+  );
+
+  useEffect(() => {
+    if (isLoading) {
+      spinAnimation.start();
+    } else {
+      spinAnimation.stop();
+      spinValue.setValue(0);
+    }
+    return () => spinAnimation.stop();
+  }, [isLoading]);
+
+  const spin = spinValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
 
   const fetchOccurrences = async () => {
     if (!user || !token) {
@@ -101,7 +125,6 @@ export default function Home() {
     setError(null);
 
     try {
-      // 1. Monta os filtros conforme a documentação da API
       const filters = [
         { "field": "id_user", "operator": "=", "value": user.id },
         { "field": "status", "operator": "=", "value": true }
@@ -110,11 +133,9 @@ export default function Home() {
         { "field": "datetime", "ordination": "desc" }
       ];
 
-      // 2. Converte os filtros para JSON e depois para Base64
       const encodedFilters = encode(JSON.stringify(filters));
       const encodedOrder = encode(JSON.stringify(order));
       
-      // 3. Monta a URL final
       const API_URL = `https://www.resolvevereador.com.br/api/occurrences/fetchbyfilter/${encodedFilters}/${encodedOrder}`;
 
       const response = await fetch(API_URL, {
@@ -139,12 +160,10 @@ export default function Home() {
     }
   };
 
-  // useFocusEffect é chamado toda vez que a tela entra em foco,
-  // garantindo que a lista seja atualizada (ex: após adicionar uma nova ocorrência).
   useFocusEffect(
     useCallback(() => {
       fetchOccurrences();
-    }, [user, token]) // As dependências garantem que a busca só seja refeita se o usuário mudar
+    }, [user, token])
   );
 
   const renderContent = () => {
@@ -175,9 +194,11 @@ export default function Home() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Minhas Ocorrências</Text>
-          <TouchableOpacity onPress={fetchOccurrences}>
-            <Feather name="refresh-cw" size={24} color="#333" />
+          <Text style={styles.headerTitle}>Ocorrências</Text>
+          <TouchableOpacity onPress={fetchOccurrences} disabled={isLoading}>
+            <Animated.View style={{ transform: [{ rotate: spin }] }}>
+              <Feather name="refresh-cw" size={24} color="#333" />
+            </Animated.View>
           </TouchableOpacity>
         </View>
         {renderContent()}
@@ -193,7 +214,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: '#f4f6f8',
+    backgroundColor: '#fff',
     paddingTop: Platform.OS === 'android' ? 25 : 0,
   },
   header: {
@@ -202,13 +223,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 15,
-    backgroundColor: '#fff',
+    backgroundColor: '#f4f4f4ff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
   headerTitle: {
     fontSize: 22,
-    fontWeight: 'bold',
+    // fontWeight: 'bold', // Removido
+    fontFamily: 'fontudo', // <-- ADICIONADO
     color: '#333',
   },
   flatListContent: {
@@ -235,7 +257,8 @@ const styles = StyleSheet.create({
   },
   occurrenceTitle: {
     fontSize: 17,
-    fontWeight: '700',
+    // fontWeight: '700', // Removido
+    fontFamily: 'fontudo', // <-- ADICIONADO
     color: '#333',
     marginBottom: 5,
   },
@@ -247,6 +270,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     marginLeft: 5,
+    fontFamily: 'fontuda', // <-- ADICIONADO
   },
   detailSeparator: {
     fontSize: 13,
@@ -263,6 +287,7 @@ const styles = StyleSheet.create({
     color: '#555',
     marginBottom: 15,
     lineHeight: 20,
+    fontFamily: 'fontuda', // <-- ADICIONADO
   },
   detailsButton: {
     backgroundColor: '#007bff',
@@ -277,13 +302,14 @@ const styles = StyleSheet.create({
   detailsButtonText: {
     color: 'white',
     fontSize: 14,
-    fontWeight: 'bold',
+    // fontWeight: 'bold', // Removido
+    fontFamily: 'fontudo', // <-- ADICIONADO
   },
   infoText: {
-      textAlign: 'center',
-      marginTop: 50,
-      fontSize: 16,
-      color: '#666'
+    textAlign: 'center',
+    marginTop: 50,
+    fontSize: 16,
+    color: '#666',
+    fontFamily: 'fontuda', // <-- ADICIONADO
   }
 });
-

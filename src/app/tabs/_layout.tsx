@@ -97,14 +97,6 @@ export default function TabsLayout() {
           tabBarStyle: { display: 'none' },
         }}
       />
-      
-      <Tabs.Screen
-        name="actions/ocorrenciasUser"
-        options={{
-          href: null,
-          tabBarStyle: { display: 'none' },
-        }}
-      />
     </Tabs>
   );
 }

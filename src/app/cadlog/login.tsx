@@ -14,11 +14,11 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Link } from 'expo-router';
-import { useFonts } from 'expo-font';
-import { useAuth } from '../../context/AuthContext'; // 1. Importa o hook de autenticação
+import { useAuth } from '../../context/AuthContext';
+import { Feather } from '@expo/vector-icons'; // 1. Importar o Feather Icons
 
 // Função para formatar o CPF enquanto o usuário digita
-const formatCpf = (cpf) => {
+const formatCpf = (cpf: string): string => {
   const cleanedCpf = cpf.replace(/\D/g, '');
   if (cleanedCpf.length <= 11) {
     return cleanedCpf
@@ -30,21 +30,11 @@ const formatCpf = (cpf) => {
 };
 
 export default function Login() {
-    const [fontsLoaded] = useFonts({
-      'fontuda': require('../../../assets/fonts/SpaceGrotesk-Regular.ttf'),
-      'fontudo': require('../../../assets/fonts/SpaceGrotesk-Bold.ttf'),
-      'fontai': require('../../../assets/fonts/SpaceGrotesk-Regular.ttf'),
-      });
-      if (!fontsLoaded) {
-        return <Text></Text>; // Ou um loading spinner
-      }
-      
   const [cpf, setCpf] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { signIn } = useAuth(); // 2. Pega a função signIn do contexto
+  const { signIn } = useAuth();
 
-  // --- FUNÇÃO DE LOGIN ATUALIZADA PARA USAR O CONTEXTO ---
   const handleLogin = async () => {
     if (!cpf || !password) {
       Alert.alert('Campos Vazios', 'Por favor, preencha o CPF e a senha.');
@@ -53,23 +43,12 @@ export default function Login() {
     
     setIsLoading(true);
     try {
-      // 3. Chama a função signIn do contexto. O contexto agora cuida da API, 
-      // de salvar os dados e do redirecionamento automático.
       await signIn(cpf, password);
-      // Se o login for bem-sucedido, o useEffect no AuthContext vai redirecionar.
     } catch (error: any) {
-      // Se o signIn der erro (ex: senha errada), ele será capturado aqui.
       Alert.alert('Erro no Login', error.message);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleForgotPassword = () => {
-    Alert.alert(
-      'Esqueci Minha Senha',
-      'Você será redirecionado para a tela de recuperação de senha.'
-    );
   };
 
   return (
@@ -81,7 +60,8 @@ export default function Login() {
           <ScrollView contentContainerStyle={styles.scrollViewContent}>
             <Link href="/" asChild>
               <TouchableOpacity style={styles.backButton}>
-                <Text style={styles.backButtonText}>{'<'}</Text>
+                {/* 2. Substituir o Text pelo ícone Feather */}
+                <Feather name="arrow-left" size={28} color="#fff" />
               </TouchableOpacity>
             </Link>
 
@@ -113,10 +93,6 @@ export default function Login() {
                 maxLength={20}
                 placeholderTextColor="#a0a0a0"
               />
-
-              <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPasswordButton}>
-                <Text style={styles.forgotPasswordText}>Esqueci minha senha</Text>
-              </TouchableOpacity>
               
               <TouchableOpacity 
                 style={[styles.button, isLoading && styles.buttonDisabled]} 
@@ -169,11 +145,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
     padding: 10,
   },
-  backButtonText: {
-    fontSize: 24,
-    color: '#fff',
-    fontWeight: 'bold',
-  },
+  // 3. Remover o estilo 'backButtonText' que não é mais necessário
   contentWrapper: {
     padding: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.9)', 
@@ -213,16 +185,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f8f8',
     marginBottom: 15,
   },
-  forgotPasswordButton: {
-    alignSelf: 'flex-end',
-    marginTop: 10,
-    marginBottom: 20,
-  },
-  forgotPasswordText: {
-    color: '#007bff',
-    fontSize: 14,
-    textDecorationLine: 'underline',
-  },
   button: {
     backgroundColor: '#316996',
     paddingVertical: 15,
@@ -254,4 +216,3 @@ const styles = StyleSheet.create({
     marginBottom: "28%"
   }
 });
-
